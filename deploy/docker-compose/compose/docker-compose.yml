@@ -1,0 +1,211 @@
+# PCAP — production-grade standalone Docker Compose stack.
+#
+# One-liner (from the deploy/docker-compose/ directory):
+#
+#   docker compose --env-file .env -f compose/docker-compose.yml -p pcap up -d
+#
+# Profiles:
+#   (default)  — PCAP + Redis + Mimir + Grafana
+#   demo       — adds the synthetic metric feeder
+#
+# See README.md for verify steps + corporate-env overrides.
+
+services:
+  redis:
+    image: redis:${REDIS_TAG:-7.4-alpine}
+    container_name: pcap-redis
+    command: ["redis-server", "--appendonly", "yes", "--save", "60", "1"]
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: ${REDIS_MEM_LIMIT:-512m}
+    networks: [pcap-net]
+
+  mimir:
+    image: grafana/mimir:${MIMIR_TAG:-2.13.0}
+    container_name: pcap-mimir
+    command: ["-config.file=/etc/mimir/mimir.yaml"]
+    environment:
+      HTTP_PROXY: ${HTTP_PROXY}
+      HTTPS_PROXY: ${HTTPS_PROXY}
+      NO_PROXY: ${NO_PROXY}
+    volumes:
+      - ../config/mimir/mimir.yaml:/etc/mimir/mimir.yaml:ro
+      - mimir-data:/data
+    ports:
+      - "${MIMIR_PORT:-9009}:9009"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:9009/ready"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: ${MIMIR_MEM_LIMIT:-2g}
+    networks: [pcap-net]
+
+  grafana:
+    image: grafana/grafana:${GRAFANA_TAG:-11.4.0}
+    container_name: pcap-grafana
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_AUTH_ANONYMOUS_ENABLED: ${GRAFANA_ANONYMOUS_ENABLED:-true}
+      GF_AUTH_ANONYMOUS_ORG_ROLE: ${GRAFANA_ANONYMOUS_ROLE:-Viewer}
+      GF_FEATURE_TOGGLES_ENABLE: "provisioning,alertingSimplifiedRouting"
+      GF_INSTALL_PLUGINS: ""
+      HTTP_PROXY: ${HTTP_PROXY}
+      HTTPS_PROXY: ${HTTPS_PROXY}
+      NO_PROXY: ${NO_PROXY}
+    volumes:
+      - ../config/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ../config/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "${GRAFANA_PORT:-3000}:3000"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/health | grep -q 'ok' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+    depends_on:
+      mimir:
+        condition: service_healthy
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: ${GRAFANA_MEM_LIMIT:-1g}
+    networks: [pcap-net]
+
+  pcap:
+    image: ${PCAP_IMAGE:-ghcr.io/your-org/pcap}:${PCAP_IMAGE_TAG:-0.1.0}
+    container_name: pcap
+    build:
+      context: ../../..
+      dockerfile: Dockerfile
+      args:
+        HTTP_PROXY: ${HTTP_PROXY}
+        HTTPS_PROXY: ${HTTPS_PROXY}
+    environment:
+      # ── Core ─────────────────────────────────────────────────────
+      PCAP_ENVIRONMENT: ${PCAP_ENVIRONMENT:-prod}
+      PCAP_LOGGING__LEVEL: ${PCAP_LOG_LEVEL:-INFO}
+      PCAP_LOGGING__JSON_FORMAT: "true"
+      # ── API ──────────────────────────────────────────────────────
+      PCAP_API__PORT: "8080"
+      PCAP_API__TOKEN_SHA256_LIST: ${PCAP_API_TOKEN_SHA256_LIST:-}
+      # ── Feature toggles ──────────────────────────────────────────
+      PCAP_FEATURES__ENABLE_UI: ${PCAP_FEATURES_ENABLE_UI:-true}
+      PCAP_FEATURES__REQUIRE_UI_APPROVAL: ${PCAP_FEATURES_REQUIRE_UI_APPROVAL:-true}
+      PCAP_FEATURES__ENABLE_LLM: ${PCAP_FEATURES_ENABLE_LLM:-false}
+      PCAP_FEATURES__ENABLE_NOTIFICATIONS: ${PCAP_FEATURES_ENABLE_NOTIFICATIONS:-false}
+      PCAP_FEATURES__ENABLE_PR_CREATION: ${PCAP_FEATURES_ENABLE_PR_CREATION:-false}
+      PCAP_FEATURES__ENABLE_GRAFANA_PROVISIONING: "true"
+      PCAP_FEATURES__DRY_RUN: ${PCAP_FEATURES_DRY_RUN:-true}
+      # ── Scheduler ────────────────────────────────────────────────
+      PCAP_SCHEDULER__ENABLED: ${PCAP_SCHEDULER_ENABLED:-true}
+      PCAP_SCHEDULER__INTERVAL_MINUTES: ${PCAP_SCHEDULER_INTERVAL_MINUTES:-30}
+      # ── Forecasting ──────────────────────────────────────────────
+      PCAP_FORECASTING__HORIZON_HOURS: ${PCAP_FORECASTING_HORIZON_HOURS:-48}
+      PCAP_FORECASTING__LOOKBACK_DAYS: ${PCAP_FORECASTING_LOOKBACK_DAYS:-14}
+      PCAP_FORECASTING__USE_PROPHET_IF_AVAILABLE: ${PCAP_FORECASTING_USE_PROPHET_IF_AVAILABLE:-false}
+      # ── Mimir ────────────────────────────────────────────────────
+      PCAP_MIMIR__URL: ${PCAP_MIMIR_URL:-http://mimir:9009}
+      PCAP_MIMIR__ORG_ID: ${PCAP_MIMIR_ORG_ID:-}
+      # ── Grafana ──────────────────────────────────────────────────
+      PCAP_GRAFANA__URL: ${PCAP_GRAFANA_URL:-http://grafana:3000}
+      # ── Redis ────────────────────────────────────────────────────
+      PCAP_REDIS__URL: "redis://redis:6379/0"
+      # ── Discovery (static) ───────────────────────────────────────
+      PCAP_K8S__MODE: "static"
+      PCAP_K8S__STATIC_WORKLOADS_FILE: "/config/pcap-workloads.yaml"
+      # ── SQLite audit DB (in-volume) ──────────────────────────────
+      PCAP_AUDIT_DB__URL: "sqlite+aiosqlite:////data/pcap-audit.db"
+      # ── GitHub ───────────────────────────────────────────────────
+      PCAP_GITHUB__REPO: ${PCAP_GITHUB_REPO:-}
+      PCAP_GITHUB__BASE_BRANCH: ${PCAP_GITHUB_BASE_BRANCH:-main}
+      # ── LLM ──────────────────────────────────────────────────────
+      PCAP_LLM__PRIMARY: ${PCAP_LLM_PRIMARY:-anthropic}
+      # ── Tracing off by default for corp (set OTel endpoint to enable) ─
+      PCAP_TRACING__ENABLED: "false"
+      # ── Corporate proxy ──────────────────────────────────────────
+      HTTP_PROXY: ${HTTP_PROXY}
+      HTTPS_PROXY: ${HTTPS_PROXY}
+      NO_PROXY: ${NO_PROXY}
+    env_file:
+      # Optional — lets operators inject secrets without committing .env
+      - path: .secrets.env
+        required: false
+    volumes:
+      - ../config/pcap/pcap-workloads.yaml:/config/pcap-workloads.yaml:ro
+      - pcap-data:/data
+      # Optional secrets directory (each file's contents becomes an env var via entrypoint hook below)
+      - ../.secrets:/run/pcap-secrets:ro
+    ports:
+      - "${PCAP_API_PORT:-8090}:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8080/healthz',timeout=3).status==200 else 1)\""]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    depends_on:
+      redis:
+        condition: service_healthy
+      mimir:
+        condition: service_healthy
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: ${PCAP_MEM_LIMIT:-2g}
+          cpus: "${PCAP_CPU_LIMIT:-2}"
+    networks: [pcap-net]
+
+  # ── Optional: synthetic-metrics feeder (enable with `--profile demo`) ──
+  seed:
+    image: python:3.12-slim
+    container_name: pcap-seed
+    profiles: ["demo"]
+    working_dir: /seed
+    volumes:
+      - ../config/seed:/seed:ro
+    command:
+      - "bash"
+      - "-c"
+      - "pip install --quiet cramjam && python -u feeder.py"
+    environment:
+      MIMIR_URL: "http://mimir:9009"
+      SEED_INTERVAL_SECONDS: "15"
+      HTTP_PROXY: ${HTTP_PROXY}
+      HTTPS_PROXY: ${HTTPS_PROXY}
+      NO_PROXY: ${NO_PROXY}
+      PIP_INDEX_URL: ${PIP_INDEX_URL:-https://pypi.org/simple}
+    depends_on:
+      mimir:
+        condition: service_healthy
+    restart: unless-stopped
+    networks: [pcap-net]
+
+volumes:
+  redis-data: {}
+  mimir-data: {}
+  grafana-data: {}
+  pcap-data: {}
+
+networks:
+  pcap-net:
+    driver: bridge

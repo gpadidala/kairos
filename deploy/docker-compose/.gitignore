@@ -1,0 +1,6 @@
+.env
+.secrets.env
+.secrets/
+!.secrets/README.md
+backups/
+offline/

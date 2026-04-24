@@ -124,3 +124,27 @@ Initial MVP covering the full §19 Phased Delivery Plan from the master prompt.
 - `ruff check` + `ruff format --check` clean
 
 [0.1.0]: https://github.com/your-org/pcap/releases/tag/v0.1.0
+
+### Added (Phase 11 — Corporate Docker Compose stack)
+- `deploy/docker-compose/` — production-shaped standalone stack following the
+  grafana12-oss lab pattern:
+  - `compose/docker-compose.yml` — PCAP + Redis + Mimir + Grafana with health
+    checks, resource limits, restart policies, bundled pre-provisioned Grafana
+    dashboards, and an optional `--profile demo` synthetic-metrics feeder.
+  - `.env.example` — pinned image tags (`REDIS_TAG`, `MIMIR_TAG`, `GRAFANA_TAG`,
+    `PCAP_IMAGE_TAG`), corporate proxy slots (`HTTP_PROXY`/`HTTPS_PROXY`/`NO_PROXY`),
+    feature flags, external Mimir/Grafana overrides, per-container resource
+    limits.
+  - `scripts/setup.sh`, `scripts/setup.ps1` — idempotent bootstrap (.env,
+    .secrets/, bring-up, verify). macOS/Linux + Windows PowerShell.
+  - `scripts/pull-images.sh` — pre-pull all images for air-gapped /
+    image-mirror installs.
+  - `scripts/backup.sh` — snapshot the SQLite audit DB + Redis AOF.
+  - `Makefile` — `up / demo-up / down / nuke / restart / logs / ps / verify / pull / backup`.
+  - `.secrets/` — gitignored per-file secret slot directory mounted read-only
+    at `/run/pcap-secrets` inside the PCAP container.
+  - Per-directory `README.md` covering corporate-proxy, image-mirror, air-gapped,
+    secret-handling, external-Grafana/Mimir pointing, real-GitHub PR enablement.
+- Top-level `README.md` rewritten in the grafana12-oss lab style: repo split
+  table, numbered sections, platform-specific quickstarts, verify outputs,
+  common-command tables, full env-var reference.
