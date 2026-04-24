@@ -37,6 +37,7 @@ from pcap.observability.metrics import (
     PIPELINE_DURATION,
     PIPELINE_RUNS_TOTAL,
 )
+from pcap.storage.approvals import ApprovalStore
 from pcap.storage.audit_store import AuditStore
 
 log = structlog.get_logger(__name__)
@@ -56,6 +57,7 @@ class PipelineDeps:
     notifier: NotifyDispatcher | None
     audit: AuditStore
     settings: Settings
+    approvals: ApprovalStore | None = None
     grafana_dashboard_url: str = ""
     semaphore: asyncio.Semaphore = field(default_factory=lambda: asyncio.Semaphore(4))
 
@@ -236,7 +238,18 @@ class Pipeline:
                 if self._deps.advisor is not None and s.features.enable_llm
                 else None
             )
-            if self._deps.pr_creator is not None and s.features.enable_pr_creation:
+
+            # Pre-PR gating: when require_ui_approval is True, enqueue the
+            # decision for human review instead of opening a PR immediately.
+            if s.features.require_ui_approval and self._deps.approvals is not None:
+                await self._deps.approvals.enqueue(decision, advice=advice)
+                log.info(
+                    "approval_enqueued",
+                    workload=decision.workload.uid,
+                    action=decision.action.value,
+                    run_id=run_id,
+                )
+            elif self._deps.pr_creator is not None and s.features.enable_pr_creation:
                 self._deps.pr_creator._dry_run = dry_run
                 pr_result = await self._deps.pr_creator.create_pr_for_decision(
                     decision, advice=advice

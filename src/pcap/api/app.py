@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -45,15 +45,84 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     settings: Settings = app.state.settings
     configure_logging(settings)
     configure_tracing(settings)
+
+    # Audit DB + approvals: best-effort bootstrap. Failures log-and-skip so
+    # the API stays up even when the DB isn't reachable.
+    app.state.db = None
+    app.state.sql_audit = None
+    app.state.approvals = None
+    try:
+        from pcap.storage.approvals import ApprovalStore  # noqa: PLC0415
+        from pcap.storage.db import Database  # noqa: PLC0415
+        from pcap.storage.sql_audit_store import SQLAuditStore  # noqa: PLC0415
+
+        db = Database.from_settings(settings.audit_db)
+        await db.create_all()
+        app.state.db = db
+        app.state.sql_audit = SQLAuditStore(db)
+        app.state.approvals = ApprovalStore(
+            db, pending_ttl_hours=settings.audit_db.pending_ttl_hours
+        )
+    except Exception as exc:
+        log.warning("audit_db_bootstrap_failed", error=str(exc))
+
+    # Grafana client — optional; used by /ui/alerts and /ui/keda panels.
+    app.state.grafana_client = None
+    try:
+        from pcap.grafana.grafana_client import GrafanaClient  # noqa: PLC0415
+
+        app.state.grafana_client = GrafanaClient(settings.grafana)
+    except Exception as exc:
+        log.info("grafana_client_unavailable", error=str(exc))
+
+    # PR creator — real when enable_pr_creation=true, demo stub otherwise.
+    app.state.pr_creator = None
+    try:
+        if settings.features.enable_pr_creation and settings.github.repo and settings.github.token:
+            from pcap.gitops.github_client import GitHubClient, PRCreator  # noqa: PLC0415
+            from pcap.gitops.repo_layout import RepoLayout  # noqa: PLC0415
+            from pcap.storage.dedup import DedupStore  # noqa: PLC0415
+            from pcap.storage.redis_client import RedisClient  # noqa: PLC0415
+
+            gh = GitHubClient(settings.github)
+            redis_client = RedisClient.from_settings(settings.redis)
+            dedup_store = DedupStore(
+                redis_client,
+                ttl_pr=settings.redis.dedup_ttl_pr_seconds,
+                ttl_notify=settings.redis.dedup_ttl_notify_seconds,
+                ttl_forecast=settings.redis.dedup_ttl_forecast_seconds,
+            )
+            app.state.pr_creator = PRCreator(
+                gh,
+                dedup_store,
+                RepoLayout(
+                    base_branch=settings.github.base_branch,
+                    branch_prefix=settings.github.branch_prefix,
+                ),
+                github_settings=settings.github,
+                dry_run=settings.features.dry_run,
+            )
+        else:
+            from pcap.api.demo_pr import DemoPRCreator  # noqa: PLC0415
+
+            app.state.pr_creator = DemoPRCreator()
+    except Exception as exc:
+        log.warning("pr_creator_bootstrap_failed", error=str(exc))
+
     log.info(
         "pcap_starting",
         environment=settings.environment,
         version=settings.version,
         dry_run=settings.features.dry_run,
+        require_ui_approval=settings.features.require_ui_approval,
+        ui_enabled=settings.features.enable_ui,
     )
     try:
         yield
     finally:
+        current_db: Any = getattr(app.state, "db", None)
+        if current_db is not None:
+            await current_db.dispose()
         log.info("pcap_shutdown")
 
 
@@ -66,7 +135,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         version=__version__,
         description=(
             "Augments KEDA with 48h CPU/memory forecasts, deterministic decisions, "
-            "and GitOps PR automation for AKS workloads."
+            "GitOps PR automation, and a human-in-the-loop approval UI for AKS workloads."
         ),
         lifespan=_lifespan,
         docs_url="/docs",
@@ -87,6 +156,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     # Unauthenticated routes
     app.include_router(health.router)
+
+    # UI + approval workflow (screens unauthenticated, API endpoints gated)
+    if s.features.enable_ui:
+        from pcap.ui.routes import build_ui_router  # noqa: PLC0415
+
+        ui_router = build_ui_router()
+        app.include_router(ui_router)
 
     # Authenticated routes
     auth_dep = [Depends(require_auth)]

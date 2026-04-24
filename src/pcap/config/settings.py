@@ -83,6 +83,18 @@ class PostgresSettings(BaseModel):
     pool_size: int = Field(default=5, ge=1, le=50)
 
 
+class AuditDBSettings(BaseModel):
+    """Durable audit + approvals store.
+
+    For a full production deploy, flip this to a Postgres DSN. The default is
+    SQLite for demo + single-replica installs.
+    """
+
+    url: str = "sqlite+aiosqlite:///./pcap-audit.db"
+    echo: bool = False
+    pending_ttl_hours: int = Field(default=24, ge=1, le=168)
+
+
 class TeamsSettings(BaseModel):
     webhook_url: SecretStr | None = None
     timeout_seconds: float = 10.0
@@ -146,6 +158,10 @@ class FeatureFlags(BaseModel):
     enable_grafana_provisioning: bool = True
     dry_run: bool = True
     allow_statefulset_auto_pr: bool = False
+    # When True, non-NOOP decisions land in the approval queue instead of
+    # creating a PR directly. UI approval triggers the PR.
+    require_ui_approval: bool = True
+    enable_ui: bool = True
 
 
 class APISettings(BaseModel):
@@ -191,6 +207,7 @@ class Settings(BaseSettings):
     llm: LLMSettings = LLMSettings()
     redis: RedisSettings = RedisSettings()
     postgres: PostgresSettings = PostgresSettings()
+    audit_db: AuditDBSettings = AuditDBSettings()
     teams: TeamsSettings = TeamsSettings()
     slack: SlackSettings = SlackSettings()
     smtp: SMTPSettings = SMTPSettings()

@@ -29,21 +29,30 @@ AKS workloads → Alloy → Mimir → PCAP (Python)
 
 Full diagrams: [ARCHITECTURE.md](./ARCHITECTURE.md).
 
-## Quickstart (local, dry-run)
+## Quickstart — 60 seconds (no cluster, no secrets, no AKS)
 
 ```bash
-# 0. Prereqs: Python 3.12, uv (https://docs.astral.sh/uv/)
-uv --version
+cd examples/demo
+docker compose up --build
+```
 
-# 1. Install
-make install
+Open:
+- **http://localhost:8090/ui** — PCAP UI (dashboard, pending approvals, history, KEDA activity, alerts)
+- **http://localhost:3000** — Grafana (admin/admin) with PCAP dashboards pre-provisioned
+- **http://localhost:8090/docs** — Swagger UI
 
-# 2. Verify (lint + type + unit tests)
-make verify
+Trigger a prediction:
+```bash
+curl -X POST http://localhost:8090/api/v1/runs -d '{"dry_run": true}'
+```
+Then visit `/ui/pending` to approve. See [examples/demo/README.md](./examples/demo/README.md) for the full walkthrough.
 
-# 3. Run the API in dry-run mode
+## Quickstart (Python, no docker)
+
+```bash
+uv --version && make install && make verify
 PCAP_FEATURES__DRY_RUN=true make api
-# → http://localhost:8080/docs
+# → http://localhost:8080/docs (or :8090 if 8080 is taken by Docker Desktop)
 ```
 
 ## Quickstart (container)

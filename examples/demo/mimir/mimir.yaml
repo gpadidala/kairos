@@ -1,0 +1,66 @@
+# Minimal Mimir single-binary config for the PCAP demo.
+# Single-tenant; filesystem storage; in-memory ring.
+
+multitenancy_enabled: false
+
+target: all,alertmanager
+
+common:
+  storage:
+    backend: filesystem
+    filesystem:
+      dir: /data/mimir
+
+blocks_storage:
+  backend: filesystem
+  filesystem:
+    dir: /data/mimir/blocks
+  tsdb:
+    dir: /data/mimir/tsdb
+
+ruler_storage:
+  backend: filesystem
+  filesystem:
+    dir: /data/mimir/ruler
+
+alertmanager_storage:
+  backend: filesystem
+  filesystem:
+    dir: /data/mimir/alertmanager
+
+server:
+  http_listen_port: 9009
+  grpc_listen_port: 9095
+
+ingester:
+  ring:
+    replication_factor: 1
+    kvstore:
+      store: inmemory
+
+distributor:
+  ring:
+    kvstore:
+      store: inmemory
+
+compactor:
+  data_dir: /data/mimir/compactor
+  sharding_ring:
+    kvstore:
+      store: inmemory
+
+store_gateway:
+  sharding_ring:
+    replication_factor: 1
+
+limits:
+  ingestion_rate: 100000
+  ingestion_burst_size: 200000
+  max_global_series_per_user: 1000000
+
+ruler:
+  alertmanager_url: http://localhost:9009/alertmanager
+
+alertmanager:
+  data_dir: /data/mimir/alertmanager
+  external_url: http://localhost:9009/alertmanager

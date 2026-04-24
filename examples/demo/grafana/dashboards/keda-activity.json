@@ -1,0 +1,86 @@
+{
+  "uid": "keda-activity",
+  "title": "KEDA Activity (AKS)",
+  "schemaVersion": 39,
+  "version": 0,
+  "editable": true,
+  "tags": ["pcap", "keda", "demo"],
+  "timezone": "utc",
+  "time": {"from": "now-24h", "to": "now"},
+  "refresh": "30s",
+  "templating": {
+    "list": [
+      {
+        "name": "namespace",
+        "type": "query",
+        "datasource": {"type": "prometheus", "uid": "mimir"},
+        "query": "label_values(keda_scaler_metrics_value, namespace)",
+        "refresh": 2,
+        "multi": true,
+        "includeAll": true
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "KEDA scaler lag per ScaledObject",
+      "gridPos": {"x": 0, "y": 0, "w": 12, "h": 8},
+      "targets": [
+        {"refId": "A", "expr": "keda_scaler_metrics_value{namespace=~\"$namespace\"}", "legendFormat": "{{namespace}}/{{scaledobject}}"}
+      ],
+      "fieldConfig": {"defaults": {"unit": "short"}}
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Replicas ready per Deployment",
+      "gridPos": {"x": 12, "y": 0, "w": 12, "h": 8},
+      "targets": [
+        {"refId": "A", "expr": "kube_deployment_status_replicas_available{namespace=~\"$namespace\"}", "legendFormat": "{{namespace}}/{{deployment}}"}
+      ],
+      "fieldConfig": {"defaults": {"unit": "short"}}
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "CPU cores per pod (rate 5m)",
+      "gridPos": {"x": 0, "y": 8, "w": 12, "h": 8},
+      "targets": [
+        {"refId": "A", "expr": "sum by (namespace, pod) (rate(container_cpu_usage_seconds_total{namespace=~\"$namespace\",container!=\"\",container!=\"POD\"}[5m]))", "legendFormat": "{{namespace}}/{{pod}}"}
+      ],
+      "fieldConfig": {"defaults": {"unit": "short"}}
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Memory working set per pod",
+      "gridPos": {"x": 12, "y": 8, "w": 12, "h": 8},
+      "targets": [
+        {"refId": "A", "expr": "sum by (namespace, pod) (container_memory_working_set_bytes{namespace=~\"$namespace\"})", "legendFormat": "{{namespace}}/{{pod}}"}
+      ],
+      "fieldConfig": {"defaults": {"unit": "bytes"}}
+    },
+    {
+      "id": 5,
+      "type": "bargauge",
+      "title": "Node-pool size (now)",
+      "gridPos": {"x": 0, "y": 16, "w": 12, "h": 6},
+      "targets": [
+        {"refId": "A", "expr": "count by (agentpool) (kube_node_info{agentpool!=\"\"})", "legendFormat": "{{agentpool}}"}
+      ],
+      "fieldConfig": {"defaults": {"unit": "short"}}
+    },
+    {
+      "id": 6,
+      "type": "stat",
+      "title": "KEDA scale events (24h)",
+      "gridPos": {"x": 12, "y": 16, "w": 12, "h": 6},
+      "targets": [
+        {"refId": "A", "expr": "sum(changes(keda_scaler_active[24h]))"}
+      ],
+      "fieldConfig": {"defaults": {"unit": "short"}}
+    }
+  ]
+}

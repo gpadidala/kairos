@@ -1,0 +1,72 @@
+{% extends "base.html.j2" %}
+{% set active = "dashboard" %}
+{% block title %}Overview{% endblock %}
+{% block content %}
+<h1 class="text-2xl font-bold mb-2">Overview</h1>
+<p class="text-sm text-slate-500 mb-6">
+  PCAP — {{ settings.environment }} · dry_run=<span class="mono">{{ settings.features.dry_run }}</span>
+  · require_ui_approval=<span class="mono">{{ settings.features.require_ui_approval }}</span>
+</p>
+
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+  <div class="bg-white rounded-lg border border-slate-200 p-4">
+    <div class="text-xs uppercase text-slate-500">Pending approvals</div>
+    <div class="text-3xl font-bold mt-1">{{ counters.pending_approvals }}</div>
+    <a href="/ui/pending" class="text-xs text-blue-600 hover:underline">Review →</a>
+  </div>
+  <div class="bg-white rounded-lg border border-slate-200 p-4">
+    <div class="text-xs uppercase text-slate-500">Decisions today</div>
+    <div class="text-3xl font-bold mt-1">{{ counters.decisions_today }}</div>
+  </div>
+  <div class="bg-white rounded-lg border border-slate-200 p-4">
+    <div class="text-xs uppercase text-slate-500">PRs opened today</div>
+    <div class="text-3xl font-bold mt-1">{{ counters.prs_today }}</div>
+  </div>
+  <div class="bg-white rounded-lg border border-slate-200 p-4">
+    <div class="text-xs uppercase text-slate-500">Approvals by status</div>
+    <ul class="text-xs mt-2 space-y-1">
+      {% for status, count in status_counts.items() %}
+        <li class="flex justify-between"><span class="mono">{{ status }}</span><span class="font-bold">{{ count }}</span></li>
+      {% else %}
+        <li class="text-slate-400">No data yet</li>
+      {% endfor %}
+    </ul>
+  </div>
+</div>
+
+<h2 class="text-lg font-semibold mb-3">Recent pipeline runs</h2>
+<div class="bg-white rounded-lg border border-slate-200 overflow-hidden">
+  <table class="w-full text-sm">
+    <thead class="bg-slate-100 text-slate-600 text-xs uppercase">
+      <tr>
+        <th class="text-left px-4 py-2">Run ID</th>
+        <th class="text-left px-4 py-2">Status</th>
+        <th class="text-right px-4 py-2">Workloads</th>
+        <th class="text-left px-4 py-2">Started</th>
+        <th class="text-left px-4 py-2">Ended</th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-slate-100">
+      {% for r in recent_runs %}
+      <tr>
+        <td class="px-4 py-2 mono text-xs">{{ r.id[:8] }}…</td>
+        <td class="px-4 py-2">
+          <span class="badge
+            {% if r.status == 'succeeded' %}bg-emerald-100 text-emerald-700
+            {% elif r.status == 'partial' %}bg-amber-100 text-amber-700
+            {% elif r.status == 'failed' %}bg-rose-100 text-rose-700
+            {% else %}bg-slate-100 text-slate-700{% endif %}">
+            {{ r.status }}
+          </span>
+        </td>
+        <td class="px-4 py-2 text-right">{{ r.workloads_processed }}</td>
+        <td class="px-4 py-2 mono text-xs">{{ r.started_at.strftime('%Y-%m-%d %H:%M') }}</td>
+        <td class="px-4 py-2 mono text-xs">{{ r.ended_at.strftime('%Y-%m-%d %H:%M') if r.ended_at else '—' }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="5" class="px-4 py-6 text-center text-slate-400">No runs yet — trigger one: <span class="mono">POST /api/v1/runs</span></td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

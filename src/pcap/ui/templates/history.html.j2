@@ -1,0 +1,106 @@
+{% extends "base.html.j2" %}
+{% set active = "history" %}
+{% block title %}History{% endblock %}
+{% block content %}
+<h1 class="text-2xl font-bold mb-6">History</h1>
+
+<h2 class="text-lg font-semibold mt-6 mb-3">Approvals (50 most recent)</h2>
+<div class="bg-white rounded-lg border border-slate-200 overflow-hidden">
+  <table class="w-full text-sm">
+    <thead class="bg-slate-100 text-slate-600 text-xs uppercase">
+      <tr>
+        <th class="text-left px-4 py-2">When</th>
+        <th class="text-left px-4 py-2">Workload</th>
+        <th class="text-left px-4 py-2">Action</th>
+        <th class="text-left px-4 py-2">Status</th>
+        <th class="text-left px-4 py-2">By</th>
+        <th class="text-left px-4 py-2">PR</th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-slate-100">
+      {% for a in approvals %}
+      <tr>
+        <td class="px-4 py-2 mono text-xs">{{ a.updated_at.strftime('%Y-%m-%d %H:%M') }}</td>
+        <td class="px-4 py-2 mono text-xs">{{ a.decision.workload.uid }}</td>
+        <td class="px-4 py-2 mono text-xs">{{ a.decision.action.value }}</td>
+        <td class="px-4 py-2">
+          <span class="badge
+            {% if a.status.value == 'applied' %}bg-emerald-100 text-emerald-700
+            {% elif a.status.value == 'approved' %}bg-blue-100 text-blue-700
+            {% elif a.status.value == 'rejected' %}bg-slate-200 text-slate-700
+            {% elif a.status.value == 'failed' %}bg-rose-100 text-rose-700
+            {% elif a.status.value == 'expired' %}bg-amber-100 text-amber-700
+            {% else %}bg-slate-100 text-slate-700{% endif %}">
+            {{ a.status.value }}
+          </span>
+        </td>
+        <td class="px-4 py-2 mono text-xs">{{ a.approved_by or '—' }}</td>
+        <td class="px-4 py-2 mono text-xs">
+          {% if a.pr_url %}<a href="{{ a.pr_url }}" class="text-blue-600 underline">#{{ a.pr_number }}</a>{% else %}—{% endif %}
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6" class="px-4 py-6 text-center text-slate-400">No approvals yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<h2 class="text-lg font-semibold mt-8 mb-3">Pull requests (50 most recent)</h2>
+<div class="bg-white rounded-lg border border-slate-200 overflow-hidden">
+  <table class="w-full text-sm">
+    <thead class="bg-slate-100 text-slate-600 text-xs uppercase">
+      <tr>
+        <th class="text-left px-4 py-2">When</th>
+        <th class="text-left px-4 py-2">Branch</th>
+        <th class="text-right px-4 py-2">#</th>
+        <th class="text-left px-4 py-2">Dry-run</th>
+        <th class="text-left px-4 py-2">Dedup</th>
+        <th class="text-left px-4 py-2">URL</th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-slate-100">
+      {% for pr in prs %}
+      <tr>
+        <td class="px-4 py-2 mono text-xs">{{ pr.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+        <td class="px-4 py-2 mono text-xs">{{ pr.branch }}</td>
+        <td class="px-4 py-2 mono text-xs text-right">{{ pr.number }}</td>
+        <td class="px-4 py-2 text-xs">{{ 'yes' if pr.dry_run else 'no' }}</td>
+        <td class="px-4 py-2 text-xs">{{ 'yes' if pr.dedup_hit else 'no' }}</td>
+        <td class="px-4 py-2 text-xs"><a class="text-blue-600 underline" href="{{ pr.url }}">open</a></td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6" class="px-4 py-6 text-center text-slate-400">No PRs recorded yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<h2 class="text-lg font-semibold mt-8 mb-3">Decisions (50 most recent)</h2>
+<div class="bg-white rounded-lg border border-slate-200 overflow-hidden">
+  <table class="w-full text-sm">
+    <thead class="bg-slate-100 text-slate-600 text-xs uppercase">
+      <tr>
+        <th class="text-left px-4 py-2">When</th>
+        <th class="text-left px-4 py-2">Workload</th>
+        <th class="text-left px-4 py-2">Action</th>
+        <th class="text-left px-4 py-2">Reason</th>
+        <th class="text-left px-4 py-2">Severity</th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-slate-100">
+      {% for d in decisions %}
+      <tr>
+        <td class="px-4 py-2 mono text-xs">{{ d.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+        <td class="px-4 py-2 mono text-xs">{{ d.workload_uid }}</td>
+        <td class="px-4 py-2 mono text-xs">{{ d.action }}</td>
+        <td class="px-4 py-2 mono text-[11px]">{{ d.reason_code }}</td>
+        <td class="px-4 py-2 text-xs">{{ d.severity }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="5" class="px-4 py-6 text-center text-slate-400">No decisions recorded yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

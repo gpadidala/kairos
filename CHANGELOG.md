@@ -2,6 +2,45 @@
 
 All notable changes to PCAP are documented here. Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning is [SemVer](https://semver.org/).
 
+## [Unreleased] — 2026-04-24
+
+### Added (Phase 9 — UI + Approval Workflow)
+- `PendingApproval` domain model + `ApprovalStatus` enum
+- `ApprovalStore` (SQLAlchemy async) with lifecycle: PENDING → APPROVED → APPLIED / REJECTED / FAILED / EXPIRED
+- `Database` + ORM models (`ApprovalRow`, `DecisionRow`, `RunRow`, `PRRow`, `NotificationRow`)
+- `SQLAuditStore` — queryable history replacing JSON-log fallback (JSON-log remains for installs without DB)
+- HTMX + Jinja2 + Tailwind CDN UI at `/ui`:
+  - `/ui/dashboard` — counters, recent runs, status distribution
+  - `/ui/pending` — per-decision card with Approve & Reject actions
+  - `/ui/history` — 50 most recent approvals, PRs, decisions
+  - `/ui/keda` — 24h replica deltas by Deployment, KEDA scale events by ScaledObject, node-pool sizes + 24h deltas (queried through Grafana → Mimir)
+  - `/ui/alerts` — active Grafana alerts (read-only, via Grafana unified alerting API)
+- JSON API: `GET /api/v1/approvals`, `GET /api/v1/approvals/{id}`, `POST /api/v1/approvals/{id}/{approve,reject}`
+- `GrafanaClient.list_active_alerts()` + `query_prometheus_instant()` — read-only pulls through Grafana's datasource proxy
+- PromQL library extended: `keda_replicas_added_24h`, `keda_scale_events_24h`, `node_pool_size`, `node_pool_delta_24h`
+- Pipeline pre-PR gating: `PCAP_FEATURES__REQUIRE_UI_APPROVAL=true` makes non-NOOP decisions land in the approval queue instead of opening PRs immediately; UI approval triggers the PR
+- `/api/v1/runs` actually runs `Pipeline.run_once` assembling deps from `app.state`
+- `DemoPRCreator` — zero-network PR stub used when `enable_pr_creation=false`
+
+### Added (Phase 10 — Demo Harness)
+- `examples/demo/docker-compose.yaml` — Mimir + Grafana + PCAP + metric feeder
+- `examples/demo/seed/feeder.py` — synthetic AKS metrics (container CPU, memory, KEDA scaler lag, node pools) written via Prometheus remote-write; 24h backfill + continuous tick
+- `examples/demo/grafana/` — pre-provisioned Mimir datasource, PCAP Platform + KEDA Activity dashboards
+- `examples/demo/pcap-config/demo-workloads.yaml` — 4 static workloads (JVM/Python/Go/.NET) triggering all decision rules
+- `examples/demo/sample-app/` — runnable Python FastAPI service with Kustomize + Helm + standalone manifest flavors, plus a Dockerfile
+- `examples/demo/gitops-repo/` — sample GitOps repo layout with `policies/pcap-invariants.rego` and `.github/workflows/validate.yml`
+- `examples/demo/README.md` — front-door walkthrough (no AKS required)
+
+### Changed
+- `Database.from_settings` uses `NullPool` for SQLite URLs to avoid stale reads across processes
+- `settings.features` — added `enable_ui`, `require_ui_approval`
+- `settings` — added `audit_db` group (SQLite by default; Postgres via URL override)
+- `PRResult.number` allows 0 for stub results (dry-run / dedup-hit)
+
+### Dependencies
+- `aiosqlite`, `python-multipart` (UI Form parsing), dev: unchanged
+- `cramjam` installed at demo-container startup for snappy remote_write encoding
+
 ## [0.1.0] — 2026-04-23
 
 Initial MVP covering the full §19 Phased Delivery Plan from the master prompt.

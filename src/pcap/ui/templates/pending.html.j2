@@ -1,0 +1,118 @@
+{% extends "base.html.j2" %}
+{% set active = "pending" %}
+{% block title %}Pending Approvals{% endblock %}
+{% block content %}
+<div class="flex items-center justify-between mb-6">
+  <div>
+    <h1 class="text-2xl font-bold">Pending Approvals</h1>
+    <p class="text-sm text-slate-500">{{ items | length }} decision(s) awaiting human approval. Approving opens a GitOps PR.</p>
+  </div>
+  <button
+    hx-get="/ui/pending"
+    hx-target="body"
+    hx-select="main"
+    hx-swap="outerHTML"
+    class="px-3 py-1.5 text-sm bg-slate-900 text-white rounded hover:bg-slate-700">
+    Refresh
+  </button>
+</div>
+
+{% if not items %}
+  <div class="bg-white rounded-lg border border-slate-200 p-12 text-center text-slate-400">
+    <p class="text-lg">No pending approvals.</p>
+    <p class="text-sm mt-1">PCAP will enqueue new ones after the next pipeline run (or trigger one via <span class="mono">POST /api/v1/runs</span>).</p>
+  </div>
+{% endif %}
+
+<div class="space-y-4">
+{% for a in items %}
+  <div id="approval-{{ a.id }}" class="bg-white rounded-lg border border-slate-200 p-5">
+    <div class="flex items-start justify-between">
+      <div>
+        <div class="flex items-center gap-2 mb-1">
+          <span class="badge
+            {% if a.decision.severity.value == 'critical' %}bg-rose-100 text-rose-700
+            {% elif a.decision.severity.value == 'warning' %}bg-amber-100 text-amber-700
+            {% else %}bg-blue-100 text-blue-700{% endif %}">
+            {{ a.decision.severity.value }}
+          </span>
+          <span class="badge bg-slate-100 text-slate-700 mono">{{ a.decision.action.value }}</span>
+          <span class="badge bg-slate-100 text-slate-700 mono text-[10px]">{{ a.decision.reason_code }}</span>
+        </div>
+        <h2 class="text-lg font-semibold mono">{{ a.decision.workload.uid }}</h2>
+        <p class="text-sm text-slate-600 mt-1">{{ a.decision.rationale }}</p>
+      </div>
+      <div class="text-right text-xs text-slate-500">
+        <div>Created <span class="mono">{{ a.created_at.strftime('%Y-%m-%d %H:%M UTC') }}</span></div>
+        <div>Confidence <span class="mono">{{ "%.2f" | format(a.decision.confidence) }}</span></div>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mt-4">
+      {% if a.decision.target_replicas is not none %}
+      <div class="bg-slate-50 rounded p-3 border border-slate-200">
+        <div class="text-xs text-slate-500 uppercase">Replicas</div>
+        <div class="text-sm mono mt-1">{{ a.decision.workload.current_replicas }} → <strong>{{ a.decision.target_replicas }}</strong></div>
+      </div>
+      {% endif %}
+      {% if a.decision.target_cpu_request %}
+      <div class="bg-slate-50 rounded p-3 border border-slate-200">
+        <div class="text-xs text-slate-500 uppercase">CPU request</div>
+        <div class="text-sm mono mt-1">{{ a.decision.workload.cpu_request }} → <strong>{{ a.decision.target_cpu_request }}</strong></div>
+      </div>
+      {% endif %}
+      {% if a.decision.target_mem_request %}
+      <div class="bg-slate-50 rounded p-3 border border-slate-200">
+        <div class="text-xs text-slate-500 uppercase">Memory request</div>
+        <div class="text-sm mono mt-1">{{ a.decision.workload.mem_request }} → <strong>{{ a.decision.target_mem_request }}</strong></div>
+      </div>
+      {% endif %}
+    </div>
+
+    {% if a.decision.forecasts %}
+    <details class="mt-4">
+      <summary class="text-sm text-slate-600 cursor-pointer">View forecasts ({{ a.decision.forecasts | length }})</summary>
+      <div class="mt-2 text-xs mono bg-slate-900 text-slate-100 p-3 rounded overflow-auto max-h-48">
+        {% for f in a.decision.forecasts %}
+          <div>metric={{ f.metric }} model={{ f.model_used.value }} p95={{ "%.3f" | format(f.p95_predicted) }} peak={{ "%.3f" | format(f.peak_predicted) }} confidence={{ "%.2f" | format(f.confidence_score) }}</div>
+        {% endfor %}
+      </div>
+    </details>
+    {% endif %}
+
+    {% if a.advice %}
+    <details class="mt-3">
+      <summary class="text-sm text-slate-600 cursor-pointer">LLM advice ({{ a.advice.provider_used.value }}, {{ a.advice.tokens_used }} tokens)</summary>
+      <div class="mt-2 text-sm text-slate-700 space-y-2 border-l-2 border-slate-200 pl-4">
+        <p><strong>Why:</strong> {{ a.advice.why }}</p>
+        <p><strong>Horizontal vs vertical:</strong> {{ a.advice.horizontal_vs_vertical }}</p>
+        <p><strong>Risk of inaction:</strong> {{ a.advice.risks_of_inaction }}</p>
+      </div>
+    </details>
+    {% endif %}
+
+    <div class="mt-5 flex items-center justify-end gap-2">
+      <form
+        hx-post="/ui/approvals/{{ a.id }}/reject"
+        hx-target="#approval-{{ a.id }}"
+        hx-swap="outerHTML"
+        class="inline">
+        <input type="hidden" name="approved_by" value="ui-user" />
+        <input type="text" name="reason" placeholder="Rejection reason"
+               class="px-2 py-1 text-xs border border-slate-300 rounded mr-1 w-48" />
+        <button class="px-3 py-1.5 text-sm bg-rose-600 text-white rounded hover:bg-rose-700">Reject</button>
+      </form>
+      <form
+        hx-post="/ui/approvals/{{ a.id }}/approve"
+        hx-target="#approval-{{ a.id }}"
+        hx-swap="outerHTML"
+        hx-confirm="Approve this scaling decision? A GitOps PR will be opened."
+        class="inline">
+        <input type="hidden" name="approved_by" value="ui-user" />
+        <button class="px-3 py-1.5 text-sm bg-emerald-600 text-white rounded hover:bg-emerald-700">Approve &amp; open PR</button>
+      </form>
+    </div>
+  </div>
+{% endfor %}
+</div>
+{% endblock %}

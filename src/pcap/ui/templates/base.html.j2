@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en" class="h-full bg-slate-50">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{% block title %}PCAP{% endblock %} · PCAP</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+  <style>
+    body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .badge { @apply inline-flex items-center rounded px-2 py-0.5 text-xs font-medium; }
+  </style>
+</head>
+<body class="h-full text-slate-800">
+  <nav class="bg-slate-900 text-slate-200">
+    <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+      <a href="/ui/dashboard" class="flex items-center gap-2">
+        <span class="text-lg font-bold text-white">PCAP</span>
+        <span class="text-xs text-slate-400 uppercase tracking-wide">Predictive Capacity Platform</span>
+      </a>
+      <div class="flex items-center gap-4 text-sm">
+        <a href="/ui/dashboard" class="hover:text-white {% if active == 'dashboard' %}text-white font-semibold{% endif %}">Overview</a>
+        <a href="/ui/pending" class="hover:text-white {% if active == 'pending' %}text-white font-semibold{% endif %}">Pending</a>
+        <a href="/ui/history" class="hover:text-white {% if active == 'history' %}text-white font-semibold{% endif %}">History</a>
+        <a href="/ui/keda" class="hover:text-white {% if active == 'keda' %}text-white font-semibold{% endif %}">KEDA Activity</a>
+        <a href="/ui/alerts" class="hover:text-white {% if active == 'alerts' %}text-white font-semibold{% endif %}">Alerts</a>
+        <a href="/docs" class="hover:text-white text-slate-400 text-xs">API</a>
+      </div>
+    </div>
+  </nav>
+  <main class="max-w-7xl mx-auto px-4 py-6">
+    {% block content %}{% endblock %}
+  </main>
+  <footer class="mt-12 py-6 text-center text-xs text-slate-500">
+    PCAP · <span class="mono">v0.1.0</span> · <a class="underline" href="/metrics">metrics</a> · <a class="underline" href="/healthz">healthz</a>
+  </footer>
+</body>
+</html>

@@ -1,0 +1,128 @@
+{% extends "base.html.j2" %}
+{% set active = "keda" %}
+{% block title %}KEDA Activity{% endblock %}
+{% block content %}
+<div class="flex items-center justify-between mb-6">
+  <div>
+    <h1 class="text-2xl font-bold">KEDA Activity (last 24h)</h1>
+    <p class="text-sm text-slate-500">
+      Replica changes and node-pool deltas observed over the last 24 hours.
+      Data is queried through Grafana → Mimir. If Grafana is unreachable, panels show an empty state.
+    </p>
+  </div>
+  {% if grafana_url %}
+  <a href="{{ grafana_url }}/dashboards" target="_blank"
+     class="text-sm text-blue-600 hover:underline">Open Grafana →</a>
+  {% endif %}
+</div>
+
+<section class="mb-8">
+  <h2 class="text-lg font-semibold mb-3">Replicas added by Deployment</h2>
+  <div class="bg-white rounded-lg border border-slate-200 overflow-hidden">
+    <table class="w-full text-sm">
+      <thead class="bg-slate-100 text-slate-600 text-xs uppercase">
+        <tr>
+          <th class="text-left px-4 py-2">Namespace</th>
+          <th class="text-left px-4 py-2">Deployment</th>
+          <th class="text-right px-4 py-2">Replicas Δ (24h)</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100">
+        {% for row in replicas_added %}
+        <tr>
+          <td class="px-4 py-2 mono text-xs">{{ row.metric.namespace or '—' }}</td>
+          <td class="px-4 py-2 mono text-xs">{{ row.metric.deployment or '—' }}</td>
+          <td class="px-4 py-2 mono text-xs text-right">
+            {% set delta = row.value[1] | float | round(0, 'floor') | int %}
+            <span class="{% if delta > 0 %}text-emerald-700 font-bold{% elif delta < 0 %}text-rose-700 font-bold{% else %}text-slate-500{% endif %}">
+              {{ delta }}
+            </span>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="3" class="px-4 py-6 text-center text-slate-400">No replica activity in the last 24h (or Grafana/Mimir not reachable).</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="mb-8">
+  <h2 class="text-lg font-semibold mb-3">KEDA scale events by ScaledObject</h2>
+  <div class="bg-white rounded-lg border border-slate-200 overflow-hidden">
+    <table class="w-full text-sm">
+      <thead class="bg-slate-100 text-slate-600 text-xs uppercase">
+        <tr>
+          <th class="text-left px-4 py-2">Namespace</th>
+          <th class="text-left px-4 py-2">ScaledObject</th>
+          <th class="text-right px-4 py-2">Events (24h)</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100">
+        {% for row in scale_events %}
+        <tr>
+          <td class="px-4 py-2 mono text-xs">{{ row.metric.namespace or '—' }}</td>
+          <td class="px-4 py-2 mono text-xs">{{ row.metric.scaledobject or '—' }}</td>
+          <td class="px-4 py-2 mono text-xs text-right">{{ row.value[1] | float | round(0, 'floor') | int }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="3" class="px-4 py-6 text-center text-slate-400">No KEDA scaler state changes observed.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="grid grid-cols-1 md:grid-cols-2 gap-6">
+  <div>
+    <h2 class="text-lg font-semibold mb-3">Node pools — current size</h2>
+    <div class="bg-white rounded-lg border border-slate-200 overflow-hidden">
+      <table class="w-full text-sm">
+        <thead class="bg-slate-100 text-slate-600 text-xs uppercase">
+          <tr>
+            <th class="text-left px-4 py-2">Pool</th>
+            <th class="text-right px-4 py-2">Nodes</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100">
+          {% for row in node_pool_size %}
+          <tr>
+            <td class="px-4 py-2 mono text-xs">{{ row.metric.agentpool or '—' }}</td>
+            <td class="px-4 py-2 mono text-xs text-right">{{ row.value[1] | float | round(0, 'floor') | int }}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="2" class="px-4 py-6 text-center text-slate-400">No node-pool data.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div>
+    <h2 class="text-lg font-semibold mb-3">Node pools — 24h delta</h2>
+    <div class="bg-white rounded-lg border border-slate-200 overflow-hidden">
+      <table class="w-full text-sm">
+        <thead class="bg-slate-100 text-slate-600 text-xs uppercase">
+          <tr>
+            <th class="text-left px-4 py-2">Pool</th>
+            <th class="text-right px-4 py-2">Δ (nodes)</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100">
+          {% for row in node_pool_delta %}
+          <tr>
+            <td class="px-4 py-2 mono text-xs">{{ row.metric.agentpool or '—' }}</td>
+            <td class="px-4 py-2 mono text-xs text-right">
+              {% set d = row.value[1] | float | round(0, 'floor') | int %}
+              <span class="{% if d > 0 %}text-emerald-700 font-bold{% elif d < 0 %}text-rose-700 font-bold{% else %}text-slate-500{% endif %}">{{ d }}</span>
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="2" class="px-4 py-6 text-center text-slate-400">No node-pool churn detected.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+{% endblock %}

@@ -68,3 +68,14 @@ class LLMProviderName(StrEnum):
     AZURE_OPENAI = "azure_openai"
     OLLAMA = "ollama"
     CANNED = "canned"
+
+
+class ApprovalStatus(StrEnum):
+    """Lifecycle state for a pending human-approved scaling decision."""
+
+    PENDING = "pending"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+    EXPIRED = "expired"
+    APPLIED = "applied"  # approved AND PR opened
+    FAILED = "failed"  # approved but PR creation failed

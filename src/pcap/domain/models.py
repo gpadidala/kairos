@@ -10,6 +10,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl, field_validator, model_validator
 
 from pcap.domain.enums import (
+    ApprovalStatus,
     ForecastModel,
     LLMProviderName,
     NotificationChannel,
@@ -234,6 +235,74 @@ class NotificationResult(BaseModel):
     delivered: bool
     error: str | None = None
     dedup_hit: bool = False
+
+
+class PendingApproval(BaseModel):
+    """A ScalingDecision awaiting human approval before side effects fire."""
+
+    model_config = _strict()
+
+    id: str
+    decision: ScalingDecision
+    advice: LLMAdvice | None = None
+    status: ApprovalStatus = ApprovalStatus.PENDING
+    created_at: datetime
+    updated_at: datetime
+    approved_by: str | None = None
+    approved_at: datetime | None = None
+    rejection_reason: str | None = None
+    pr_url: HttpUrl | None = None
+    pr_number: int | None = None
+    error: str | None = None
+
+    @property
+    def decision_hash(self) -> str:
+        return self.decision.decision_hash()
+
+
+class KedaActivity(BaseModel):
+    """A single KEDA-driven replica-count change observed in the last N hours."""
+
+    model_config = _strict()
+
+    workload_uid: str
+    scaledobject: str
+    from_replicas: int = Field(ge=0)
+    to_replicas: int = Field(ge=0)
+    ts: datetime
+
+    @property
+    def delta(self) -> int:
+        return self.to_replicas - self.from_replicas
+
+
+class NodePoolActivity(BaseModel):
+    """Node-pool size change observed within the observation window."""
+
+    model_config = _strict()
+
+    node_pool: str
+    from_nodes: int = Field(ge=0)
+    to_nodes: int = Field(ge=0)
+    ts: datetime
+
+    @property
+    def delta(self) -> int:
+        return self.to_nodes - self.from_nodes
+
+
+class GrafanaAlert(BaseModel):
+    """Active alert pulled from the Grafana alerting API."""
+
+    model_config = _strict()
+
+    uid: str
+    title: str
+    state: str  # "alerting" | "pending" | "normal" | "no_data" | "error"
+    severity: str = "info"
+    labels: dict[str, str] = Field(default_factory=dict)
+    summary: str | None = None
+    starts_at: datetime | None = None
 
 
 class RunResult(BaseModel):

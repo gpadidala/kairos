@@ -34,6 +34,11 @@ class QueryName(StrEnum):
     # KEDA
     KEDA_METRIC_VALUE = "keda_scaler_metrics_value"
     KEDA_SCALER_ACTIVE = "keda_scaler_active"
+    # KEDA activity + node-pool panels (UI)
+    KEDA_REPLICAS_ADDED_24H = "keda_replicas_added_24h"
+    KEDA_SCALE_EVENTS_24H = "keda_scale_events_24h"
+    NODE_POOL_SIZE = "node_pool_size"
+    NODE_POOL_DELTA_24H = "node_pool_delta_24h"
 
 
 _QUERIES: dict[QueryName, Template] = {
@@ -96,6 +101,26 @@ _QUERIES: dict[QueryName, Template] = {
     ),
     QueryName.KEDA_SCALER_ACTIVE: Template(
         'max(keda_scaler_active{namespace="$namespace",scaledobject="$scaledobject"})'
+    ),
+    # Across all KEDA-managed deployments, 24h replica delta.
+    QueryName.KEDA_REPLICAS_ADDED_24H: Template(
+        "sum by (namespace, deployment) ("
+        "max_over_time(kube_deployment_status_replicas_available[24h]) - "
+        "min_over_time(kube_deployment_status_replicas_available[24h])"
+        ")"
+    ),
+    # Count KEDA scale events in the last 24h via scaler_active transitions.
+    QueryName.KEDA_SCALE_EVENTS_24H: Template(
+        "sum by (namespace, scaledobject) (changes(keda_scaler_active[24h]))"
+    ),
+    # Per-nodepool current size (AKS labels the nodes with agentpool=<pool>).
+    QueryName.NODE_POOL_SIZE: Template('count by (agentpool) (kube_node_info{agentpool!=""})'),
+    # Per-nodepool 24h delta (nodes added minus removed).
+    QueryName.NODE_POOL_DELTA_24H: Template(
+        "sum by (agentpool) ("
+        'max_over_time(count by (agentpool) (kube_node_info{agentpool!=""})[24h:5m]) - '
+        'min_over_time(count by (agentpool) (kube_node_info{agentpool!=""})[24h:5m])'
+        ")"
     ),
 }
 

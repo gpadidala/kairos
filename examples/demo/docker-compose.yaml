@@ -1,0 +1,102 @@
+# PCAP local demo — no AKS cluster required.
+#
+#   docker compose up --build
+#
+#   Grafana:  http://localhost:3000   (admin / admin)
+#   Mimir:    http://localhost:9009   (OSS read/write)
+#   PCAP UI:  http://localhost:8090/ui
+#   PCAP API: http://localhost:8090/docs
+#
+# The `seed` service waits for Mimir to be ready, then continuously
+# writes synthetic AKS-style metrics (container CPU, memory working set,
+# KEDA scaler metrics, kube_node_info) so the UI panels + Grafana
+# dashboards have realistic data.
+
+services:
+  mimir:
+    image: grafana/mimir:2.13.0
+    command: ["-config.file=/etc/mimir/mimir.yaml"]
+    volumes:
+      - ./mimir/mimir.yaml:/etc/mimir/mimir.yaml:ro
+      - mimir-data:/data
+    ports:
+      - "9009:9009"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:9009/ready"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  grafana:
+    image: grafana/grafana:11.4.0
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_FEATURE_TOGGLES_ENABLE: "provisioning,alertingSimplifiedRouting"
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "3000:3000"
+    depends_on:
+      mimir:
+        condition: service_healthy
+
+  seed:
+    image: python:3.12-slim
+    working_dir: /seed
+    volumes:
+      - ./seed:/seed:ro
+    command:
+      - "bash"
+      - "-c"
+      - "pip install --quiet cramjam && python -u feeder.py"
+    environment:
+      MIMIR_URL: "http://mimir:9009"
+      SEED_INTERVAL_SECONDS: "15"
+    depends_on:
+      mimir:
+        condition: service_healthy
+    restart: unless-stopped
+
+  pcap:
+    build:
+      context: ../../..
+      dockerfile: Dockerfile
+    environment:
+      PCAP_ENVIRONMENT: demo
+      PCAP_MIMIR__URL: "http://mimir:9009"
+      PCAP_GRAFANA__URL: "http://grafana:3000"
+      # demo uses anonymous read; in real installs, populate via secret
+      PCAP_GRAFANA__API_TOKEN: ""
+      PCAP_AUDIT_DB__URL: "sqlite+aiosqlite:////data/pcap-audit.db"
+      # Static discovery pointing at the bundled demo workloads
+      PCAP_K8S__MODE: "static"
+      PCAP_K8S__STATIC_WORKLOADS_FILE: "/config/demo-workloads.yaml"
+      # UI + approvals on. PR creation off (no real GitHub).
+      PCAP_FEATURES__ENABLE_UI: "true"
+      PCAP_FEATURES__REQUIRE_UI_APPROVAL: "true"
+      PCAP_FEATURES__ENABLE_PR_CREATION: "false"
+      PCAP_FEATURES__ENABLE_NOTIFICATIONS: "false"
+      PCAP_FEATURES__ENABLE_LLM: "false"
+      PCAP_FEATURES__DRY_RUN: "true"
+      PCAP_SCHEDULER__ENABLED: "false"
+      PCAP_TRACING__ENABLED: "false"
+      PCAP_LOGGING__JSON_FORMAT: "false"
+      PCAP_FORECASTING__LOOKBACK_DAYS: "1"
+      PCAP_FORECASTING__USE_PROPHET_IF_AVAILABLE: "false"
+    volumes:
+      - ./pcap-config:/config:ro
+      - pcap-data:/data
+    ports:
+      - "8090:8080"
+    depends_on:
+      mimir:
+        condition: service_healthy
+
+volumes:
+  mimir-data: {}
+  grafana-data: {}
+  pcap-data: {}

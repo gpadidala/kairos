@@ -1,0 +1,67 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: payments-api
+  namespace: prod
+  labels:
+    app.kubernetes.io/name: payments-api
+    app.kubernetes.io/runtime: python
+  annotations:
+    pcap.io/gitops-path: "apps/payments-api"
+    pcap.io/runtime: "python"
+    pcap.io/keda-scaledobject: "payments-api-scaler"
+spec:
+  replicas: 3  # PCAP edits this line on horizontal scale
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: payments-api
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: payments-api
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/path: "/metrics"
+        prometheus.io/port: "8000"
+    spec:
+      containers:
+        - name: payments-api
+          image: ghcr.io/your-org/payments-api:1.0.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - { name: http, containerPort: 8000 }
+          env:
+            - name: KAFKA_BROKERS
+              value: "kafka-bootstrap.kafka.svc:9092"
+            - name: KAFKA_TOPIC
+              value: "payments"
+            - name: WORKERS
+              value: "4"
+          resources:
+            requests:
+              cpu: 500m
+              memory: 1Gi
+            limits:
+              cpu: "2"
+              memory: 2Gi
+          livenessProbe:
+            httpGet: { path: /healthz, port: http }
+            initialDelaySeconds: 5
+            periodSeconds: 20
+          readinessProbe:
+            httpGet: { path: /readyz, port: http }
+            initialDelaySeconds: 3
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: payments-api
+  namespace: prod
+  labels:
+    app.kubernetes.io/name: payments-api
+spec:
+  selector:
+    app.kubernetes.io/name: payments-api
+  ports:
+    - { name: http, port: 8000, targetPort: http }

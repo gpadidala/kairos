@@ -116,6 +116,39 @@ class GrafanaClient:
                 return await self._request("POST", "/api/v1/provisioning/alert-rules", json=rule)
             raise
 
+    # ── Alerts (unified alerting read-only API) ───────────────────────
+    async def list_active_alerts(self) -> list[dict[str, Any]]:
+        """Return currently active alerts from Grafana (Prometheus-style API)."""
+        try:
+            payload = await self._request("GET", "/api/prometheus/grafana/api/v1/alerts")
+        except ExternalServiceError:
+            return []
+        data = payload.get("data", payload)
+        alerts = data.get("alerts", []) if isinstance(data, dict) else data
+        if not isinstance(alerts, list):
+            return []
+        return [a for a in alerts if isinstance(a, dict)]
+
+    async def query_prometheus_instant(
+        self, query: str, *, datasource_uid: str = "mimir"
+    ) -> list[dict[str, Any]]:
+        """Proxy a PromQL instant query through Grafana's datasource proxy.
+
+        Used by the UI for KEDA activity panels + node-pool deltas. Empty list
+        when Grafana or the datasource is unreachable — fail-safe.
+        """
+        try:
+            payload = await self._request(
+                "GET",
+                f"/api/datasources/proxy/uid/{datasource_uid}/api/v1/query",
+                params={"query": query},
+            )
+        except ExternalServiceError:
+            return []
+        data = payload.get("data", {})
+        result = data.get("result", []) if isinstance(data, dict) else []
+        return [r for r in result if isinstance(r, dict)]
+
     async def ping(self) -> bool:
         try:
             await self._request("GET", "/api/health")

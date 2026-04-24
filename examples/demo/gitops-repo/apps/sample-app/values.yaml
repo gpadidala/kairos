@@ -1,0 +1,34 @@
+# PCAP edits the `replicaCount` and/or `resources.requests.*` fields on approved
+# decisions. Comments + structure are preserved via ruamel.yaml round-trip.
+
+replicaCount: 3      # PCAP writes here on HORIZONTAL_UP / HORIZONTAL_DOWN
+
+image:
+  repository: ghcr.io/your-org/payments-api
+  tag: "1.0.0"
+  pullPolicy: IfNotPresent
+
+resources:
+  requests:
+    cpu: 500m          # PCAP writes here on VERTICAL_UP
+    memory: 1Gi        # PCAP writes here on VERTICAL_UP
+  limits:
+    cpu: "2"
+    memory: 2Gi
+
+service:
+  type: ClusterIP
+  port: 8000
+
+keda:
+  enabled: true
+  scaledobject: payments-api-scaler
+  minReplicaCount: 2   # PCAP writes here on KEDA_PRESCALE
+  maxReplicaCount: 25
+  triggers:
+    - type: kafka
+      metadata:
+        bootstrapServers: "kafka-bootstrap.kafka.svc:9092"
+        consumerGroup: "payments-api"
+        topic: "payments"
+        lagThreshold: "100"
