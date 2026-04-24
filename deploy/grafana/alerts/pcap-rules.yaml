@@ -1,0 +1,39 @@
+apiVersion: 1
+groups:
+  - orgId: 1
+    name: pcap-platform
+    folder: PCAP
+    interval: 1m
+    rules:
+      - uid: pcap-self-error-rate
+        title: PCAP pipeline error rate
+        condition: C
+        data:
+          - refId: A
+            datasourceUid: "$DS_PROM"
+            relativeTimeRange: {from: 600, to: 0}
+            model:
+              expr: |-
+                sum(rate(pcap_pipeline_runs_total{status="failed"}[5m]))
+                / clamp_min(sum(rate(pcap_pipeline_runs_total[5m])), 1)
+              refId: A
+          - refId: C
+            datasourceUid: __expr__
+            relativeTimeRange: {from: 0, to: 0}
+            model:
+              type: threshold
+              expression: A
+              refId: C
+              conditions:
+                - evaluator: {type: gt, params: [0.1]}
+                  operator: {type: and}
+                  type: query
+        noDataState: OK
+        execErrState: OK
+        for: 10m
+        labels:
+          severity: warning
+          component: pcap
+        annotations:
+          summary: "PCAP pipeline error rate > 10% for 10 minutes"
+          runbook_url: "https://example.com/runbooks/pcap-down"

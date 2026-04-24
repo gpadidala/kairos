@@ -1,0 +1,216 @@
+[project]
+name = "pcap"
+version = "0.1.0"
+description = "Predictive Capacity & Autoscaling Platform for AKS"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+license = { text = "MIT" }
+authors = [{ name = "PCAP Maintainers" }]
+keywords = ["kubernetes", "aks", "autoscaling", "forecasting", "gitops", "keda"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: System Administrators",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: System :: Monitoring",
+]
+
+dependencies = [
+    # Web / API
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
+    "httpx[http2]>=0.27.0",
+    # Validation / config
+    "pydantic>=2.9.0",
+    "pydantic-settings>=2.5.0",
+    "email-validator>=2.2.0",
+    # Logging / tracing / metrics
+    "structlog>=24.4.0",
+    "python-json-logger>=2.0.7",
+    "prometheus-client>=0.21.0",
+    "opentelemetry-api>=1.27.0",
+    "opentelemetry-sdk>=1.27.0",
+    "opentelemetry-exporter-otlp>=1.27.0",
+    "opentelemetry-instrumentation-fastapi>=0.48b0",
+    "opentelemetry-instrumentation-httpx>=0.48b0",
+    # Forecasting (prophet is optional — statistical fallback always available)
+    "pandas>=2.2.0",
+    "numpy>=1.26.0,<2.0.0",
+    "scikit-learn>=1.5.0",
+    "statsmodels>=0.14.0",
+    # Storage
+    "redis>=5.1.0",
+    "asyncpg>=0.29.0",
+    "sqlalchemy[asyncio]>=2.0.35",
+    # GitHub / GitOps
+    "PyGithub>=2.4.0",
+    "ruamel.yaml>=0.18.0",
+    "jinja2>=3.1.0",
+    # Resilience
+    "pybreaker>=1.2.0",
+    "tenacity>=9.0.0",
+    # Scheduling
+    "apscheduler>=3.10.4",
+    # K8s (read-only discovery)
+    "kubernetes-asyncio>=31.1.0",
+    # CLI
+    "typer>=0.12.0",
+    # Utilities
+    "python-dateutil>=2.9.0",
+    "uuid7>=0.1.0",
+]
+
+[project.optional-dependencies]
+prophet = ["prophet>=1.1.5"]
+llm-anthropic = ["anthropic>=0.39.0"]
+llm-openai = ["openai>=1.54.0"]
+all = [
+    "prophet>=1.1.5",
+    "anthropic>=0.39.0",
+    "openai>=1.54.0",
+]
+
+[project.scripts]
+pcap = "pcap.__main__:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.24.0",
+    "pytest-cov>=5.0.0",
+    "pytest-mock>=3.14.0",
+    "respx>=0.21.1",
+    "freezegun>=1.5.0",
+    "hypothesis>=6.112.0",
+    "fakeredis>=2.25.0",
+    "ruff>=0.7.0",
+    "mypy>=1.13.0",
+    "bandit>=1.7.10",
+    "pip-audit>=2.7.0",
+    "types-python-dateutil>=2.9.0",
+    "types-requests>=2.32.0",
+    "types-PyYAML>=6.0.0",
+    "pandas-stubs>=2.2.0",
+    "pre-commit>=4.0.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/pcap"]
+
+# ─────────────────────────────────────────────────────────────────
+# Ruff
+# ─────────────────────────────────────────────────────────────────
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E", "W",    # pycodestyle
+    "F",         # pyflakes
+    "I",         # isort
+    "B",         # bugbear
+    "C4",        # comprehensions
+    "UP",        # pyupgrade
+    "N",         # naming
+    "SIM",       # simplify
+    "TID",       # tidy imports
+    "PL",        # pylint
+    "RUF",       # ruff-specific
+    "ASYNC",     # async correctness
+    "S",         # bandit-lite
+]
+ignore = [
+    "E501",      # line too long — ruff format handles
+    "PLR0913",   # too many args
+    "PLR2004",   # magic values (common in tests)
+    "S101",      # assert allowed in tests
+    "N818",      # exception naming
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["S", "PLR", "N"]
+"src/pcap/__main__.py" = ["T201"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+# ─────────────────────────────────────────────────────────────────
+# Mypy (strict)
+# ─────────────────────────────────────────────────────────────────
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_unused_configs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+disallow_any_unimported = false
+plugins = ["pydantic.mypy"]
+files = ["src/pcap"]
+
+[[tool.mypy.overrides]]
+module = [
+    "prophet.*",
+    "statsmodels.*",
+    "sklearn.*",
+    "apscheduler.*",
+    "pybreaker",
+    "pybreaker.*",
+    "github.*",
+    "ruamel.*",
+    "fakeredis.*",
+    "prometheus_client.*",
+]
+ignore_missing_imports = true
+follow_imports = "skip"
+
+[tool.pydantic-mypy]
+init_forbid_extra = true
+init_typed = true
+warn_required_dynamic_aliases = true
+
+# ─────────────────────────────────────────────────────────────────
+# Pytest
+# ─────────────────────────────────────────────────────────────────
+[tool.pytest.ini_options]
+minversion = "8.0"
+addopts = [
+    "-ra",
+    "--strict-markers",
+    "--strict-config",
+    "--cov=pcap",
+    "--cov-report=term-missing",
+    "--cov-report=xml",
+]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+markers = [
+    "integration: integration tests (external stubs)",
+    "e2e: end-to-end pipeline tests",
+    "slow: slow tests",
+]
+filterwarnings = [
+    "error",
+    "ignore::DeprecationWarning:pydantic.*",
+    "ignore::DeprecationWarning:prophet.*",
+]
+
+[tool.coverage.run]
+branch = true
+source = ["src/pcap"]
+omit = ["src/pcap/__main__.py"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "raise NotImplementedError",
+    "if TYPE_CHECKING:",
+    "\\.\\.\\.",
+]
+show_missing = true

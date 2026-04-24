@@ -1,0 +1,39 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: event-router
+  namespace: prod
+  labels:
+    app.kubernetes.io/name: event-router
+    app.kubernetes.io/runtime: go
+  annotations:
+    pcap.io/gitops-path: "apps/event-router"
+    pcap.io/runtime: "go"
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: event-router
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: event-router
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/path: "/metrics"
+        prometheus.io/port: "9090"
+    spec:
+      containers:
+        - name: event-router
+          image: gcr.io/distroless/static-debian12
+          args: ["--addr=:8080", "--metrics=:9090"]
+          ports:
+            - { name: http, containerPort: 8080 }
+            - { name: metrics, containerPort: 9090 }
+          resources:
+            requests:
+              cpu: 250m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi
