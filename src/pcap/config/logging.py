@@ -63,8 +63,7 @@ def configure_logging(settings: Settings | None = None) -> None:
 
     shared: list[Processor] = [
         structlog.contextvars.merge_contextvars,
-        structlog.stdlib.add_logger_name,
-        structlog.stdlib.add_log_level,
+        structlog.processors.add_log_level,
         _add_service_context("pcap", s.version, s.environment),
         timestamper,
         structlog.processors.StackInfoRenderer(),
