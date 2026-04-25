@@ -1,0 +1,164 @@
+{% extends "base.html.j2" %}
+{% set active = "workloads" %}
+{% block title %}{{ workload.name }} · Workload{% endblock %}
+{% block content %}
+<div class="mb-2 flex items-center gap-2 text-xs text-white/45">
+  <a href="/ui/workloads">Workloads</a>
+  <svg viewBox="0 0 24 24" class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
+  <span class="mono">{{ workload.namespace }}</span>
+  <svg viewBox="0 0 24 24" class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
+  <span class="mono text-white/85">{{ workload.name }}</span>
+</div>
+
+<div class="flex items-end justify-between mb-8">
+  <div>
+    <h1 class="text-3xl font-bold tracking-tight mb-1">{{ workload.name }}</h1>
+    <div class="flex items-center gap-2 text-sm text-white/55">
+      <span class="pill pill-mono">{{ workload.kind.value }}</span>
+      <span class="pill pill-mono">{{ workload.runtime.value }}</span>
+      <span>· {{ workload.namespace }}</span>
+    </div>
+  </div>
+  {% if grafana_url %}
+  <a href="{{ grafana_url }}/d/keda-23951?var-namespace={{ workload.namespace }}&var-scaledobject={{ workload.keda_scaledobject or '' }}" target="_blank" class="btn-glass btn-glass-sm">
+    <svg viewBox="0 0 24 24" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M14 3h7v7m0-7L10 14m-3-7H4a1 1 0 00-1 1v13a1 1 0 001 1h13a1 1 0 001-1v-3"/>
+    </svg>
+    Open in Grafana
+  </a>
+  {% endif %}
+</div>
+
+<!-- Spec card row -->
+<div class="grid grid-cols-1 md:grid-cols-4 gap-5 mb-8">
+  <div class="glass p-5">
+    <div class="text-[11px] uppercase tracking-widest text-white/45 mb-2">Replicas</div>
+    <div class="stat-number">{{ workload.current_replicas }}</div>
+    <div class="text-xs text-white/40 mt-2 mono">current ready</div>
+  </div>
+  <div class="glass p-5">
+    <div class="text-[11px] uppercase tracking-widest text-white/45 mb-2">CPU</div>
+    <div class="text-2xl font-semibold tracking-tight">
+      <span class="text-white">{{ workload.cpu_request }}</span>
+      <span class="text-white/40 text-base">/ {{ workload.cpu_limit or '—' }}</span>
+    </div>
+    <div class="text-xs text-white/40 mt-2 mono">request / limit</div>
+  </div>
+  <div class="glass p-5">
+    <div class="text-[11px] uppercase tracking-widest text-white/45 mb-2">Memory</div>
+    <div class="text-2xl font-semibold tracking-tight">
+      <span class="text-white">{{ workload.mem_request }}</span>
+      <span class="text-white/40 text-base">/ {{ workload.mem_limit or '—' }}</span>
+    </div>
+    <div class="text-xs text-white/40 mt-2 mono">request / limit</div>
+  </div>
+  <div class="glass p-5">
+    <div class="text-[11px] uppercase tracking-widest text-white/45 mb-2">KEDA</div>
+    {% if workload.keda_scaledobject %}
+      <div class="text-base font-semibold mono break-all">{{ workload.keda_scaledobject }}</div>
+      {% set active_val = (keda_health[0].value[1] | float) if keda_health else 0 %}
+      {% set err_val = (keda_errors[0].value[1] | float) if keda_errors else 0 %}
+      <div class="mt-2 flex flex-wrap gap-2">
+        <span class="pill {% if active_val > 0 %}pill-success{% else %}{% endif %}">
+          <span class="w-1.5 h-1.5 rounded-full bg-current"></span>
+          {{ "active" if active_val > 0 else "inactive" }}
+        </span>
+        <span class="pill {% if err_val > 0 %}pill-danger{% else %}pill-success{% endif %}">
+          {{ err_val | int }} error{% if err_val != 1 %}s{% endif %} (cum)
+        </span>
+      </div>
+    {% else %}
+      <div class="text-white/40 text-sm">No ScaledObject</div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Live metrics -->
+<div class="grid grid-cols-1 md:grid-cols-2 gap-5 mb-8">
+  <div class="glass p-5">
+    <div class="flex items-center justify-between mb-1">
+      <div class="text-[11px] uppercase tracking-widest text-white/45">CPU usage (cores)</div>
+      <span class="mono text-xs text-white/55">
+        {% if cpu_points %}{{ "%.3f" | format(cpu_points[-1]) }}{% else %}—{% endif %}
+      </span>
+    </div>
+    {% if cpu_points %}
+    <svg viewBox="0 0 100 30" preserveAspectRatio="none" class="sparkline mt-2" style="height: 60px;">
+      <polyline class="sparkline-area"
+        points="0,30 {% for v in cpu_points %}{{ loop.index0 * (100 / [(cpu_points|length-1), 1]|max) }},{{ 30 - (v / [cpu_points|max, 0.001]|max) * 28 }} {% endfor %} 100,30"
+        fill="rgba(110,168,255,0.18)" stroke="none"/>
+      <polyline points="{% for v in cpu_points %}{{ loop.index0 * (100 / [(cpu_points|length-1), 1]|max) }},{{ 30 - (v / [cpu_points|max, 0.001]|max) * 28 }} {% endfor %}"
+        fill="none" stroke="#6ea8ff" stroke-width="1.5"/>
+    </svg>
+    {% else %}
+    <div class="text-xs text-white/40 mt-3">no metrics — Mimir unavailable or empty range.</div>
+    {% endif %}
+  </div>
+
+  <div class="glass p-5">
+    <div class="flex items-center justify-between mb-1">
+      <div class="text-[11px] uppercase tracking-widest text-white/45">Memory working set</div>
+      <span class="mono text-xs text-white/55">
+        {% if mem_points %}{{ (mem_points[-1] / 1024 / 1024) | round(0) | int }} MiB{% else %}—{% endif %}
+      </span>
+    </div>
+    {% if mem_points %}
+    <svg viewBox="0 0 100 30" preserveAspectRatio="none" class="sparkline mt-2" style="height: 60px;">
+      <polyline points="{% for v in mem_points %}{{ loop.index0 * (100 / [(mem_points|length-1), 1]|max) }},{{ 30 - (v / [mem_points|max, 0.001]|max) * 28 }} {% endfor %}"
+        fill="none" stroke="#fbbf24" stroke-width="1.5"/>
+    </svg>
+    {% else %}
+    <div class="text-xs text-white/40 mt-3">no metrics.</div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Recent decisions for this workload -->
+<h2 class="text-sm font-semibold uppercase tracking-widest text-white/55 mb-3">Recent decisions</h2>
+<div class="glass overflow-hidden">
+  <table class="glass-table">
+    <thead>
+      <tr>
+        <th>When</th>
+        <th>Action</th>
+        <th>Reason</th>
+        <th>Severity</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for d in decisions %}
+      <tr>
+        <td class="mono text-xs text-white/60">{{ d.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+        <td class="mono text-xs">{{ d.action }}</td>
+        <td class="mono text-[11px] text-white/70">{{ d.reason_code }}</td>
+        <td>
+          <span class="pill
+            {% if d.severity == 'critical' %}pill-danger
+            {% elif d.severity == 'warning' %}pill-warn
+            {% else %}pill-info{% endif %}">{{ d.severity }}</span>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="4" class="text-center py-12 text-white/40 text-sm">No decisions yet for this workload.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<!-- Annotations summary -->
+{% if workload.annotations %}
+<details class="mt-6">
+  <summary class="text-xs text-white/55 inline-flex items-center gap-1 hover:text-white/85">
+    <svg viewBox="0 0 24 24" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
+    </svg>
+    Annotations ({{ workload.annotations | length }})
+  </summary>
+  <div class="mt-2 text-xs mono p-3 rounded-xl glass space-y-1 text-white/75">
+    {% for k, v in workload.annotations.items() %}
+      <div><span class="text-blue-300">{{ k }}</span>=<span>{{ v }}</span></div>
+    {% endfor %}
+  </div>
+</details>
+{% endif %}
+{% endblock %}

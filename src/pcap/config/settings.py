@@ -35,12 +35,22 @@ class GitHubSettings(BaseModel):
 
 
 class GrafanaSettings(BaseModel):
+    # Server-side URL — what the PCAP container hits for API calls (in-cluster
+    # service name in k8s; docker service name in compose).
     url: HttpUrl = HttpUrl("http://grafana.monitoring.svc:3000")
+    # Browser-facing URL used for clickable links in the UI ("Open Grafana",
+    # alert deep-links). Falls back to `url` when not set.
+    external_url: HttpUrl | None = None
     api_token: SecretStr | None = None
     folder: str = "PCAP"
     datasource_mimir: str = "Mimir"
     provision_dashboards: bool = True
     provision_alerts: bool = True
+
+    @property
+    def public_url(self) -> str:
+        """The URL UI templates should embed in <a href>."""
+        return str(self.external_url or self.url).rstrip("/")
 
 
 class LLMProviderConfig(BaseModel):

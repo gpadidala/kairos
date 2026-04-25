@@ -12,8 +12,9 @@ from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
 from pcap.collectors.promql_library import PromQLLibrary, QueryName
+from pcap.discovery.workload_discovery import WorkloadDiscovery
 from pcap.domain.enums import ApprovalStatus
-from pcap.domain.models import GrafanaAlert, PendingApproval
+from pcap.domain.models import GrafanaAlert, PendingApproval, Workload
 from pcap.grafana.grafana_client import GrafanaClient
 from pcap.storage.approvals import ApprovalStore
 from pcap.storage.sql_audit_store import SQLAuditStore
@@ -38,6 +39,24 @@ def _deps(request: Request) -> dict[str, Any]:
 
 
 DepsDep = Depends(_deps)
+
+
+async def _pending_count(deps: dict[str, Any]) -> int:
+    """Count surfaced in the sidebar badge."""
+    approvals: ApprovalStore | None = deps["approvals"]
+    if approvals is None:
+        return 0
+    counts = await approvals.counts()
+    return int(counts.get(ApprovalStatus.PENDING.value, 0))
+
+
+async def _ctx(deps: dict[str, Any], **extra: Any) -> dict[str, Any]:
+    """Build the standard template context — every screen gets pending_count + settings."""
+    return {
+        "settings": deps["settings"],
+        "pending_count": await _pending_count(deps),
+        **extra,
+    }
 
 
 # ── Small response models for the JSON endpoints ──────────────────────
@@ -79,12 +98,12 @@ def build_ui_router() -> APIRouter:  # noqa: PLR0915 — single factory register
         return templates.TemplateResponse(
             request,
             "dashboard.html.j2",
-            {
-                "counters": counters,
-                "status_counts": status_counts,
-                "recent_runs": recent_runs,
-                "settings": deps["settings"],
-            },
+            await _ctx(
+                deps,
+                counters=counters,
+                status_counts=status_counts,
+                recent_runs=recent_runs,
+            ),
         )
 
     @router.get("/ui/pending", response_class=HTMLResponse, include_in_schema=False)
@@ -96,7 +115,7 @@ def build_ui_router() -> APIRouter:  # noqa: PLR0915 — single factory register
         return templates.TemplateResponse(
             request,
             "pending.html.j2",
-            {"items": items, "settings": deps["settings"]},
+            await _ctx(deps, items=items),
         )
 
     @router.get("/ui/history", response_class=HTMLResponse, include_in_schema=False)
@@ -126,11 +145,12 @@ def build_ui_router() -> APIRouter:  # noqa: PLR0915 — single factory register
         return templates.TemplateResponse(
             request,
             "history.html.j2",
-            {
-                "approvals": recent_approvals,
-                "decisions": recent_decisions,
-                "prs": recent_prs,
-            },
+            await _ctx(
+                deps,
+                approvals=recent_approvals,
+                decisions=recent_decisions,
+                prs=recent_prs,
+            ),
         )
 
     @router.get("/ui/keda", response_class=HTMLResponse, include_in_schema=False)
@@ -156,13 +176,14 @@ def build_ui_router() -> APIRouter:  # noqa: PLR0915 — single factory register
         return templates.TemplateResponse(
             request,
             "keda.html.j2",
-            {
-                "replicas_added": replicas_added,
-                "scale_events": scale_events,
-                "node_pool_size": node_pool_size,
-                "node_pool_delta": node_pool_delta,
-                "grafana_url": str(deps["settings"].grafana.url).rstrip("/"),
-            },
+            await _ctx(
+                deps,
+                replicas_added=replicas_added,
+                scale_events=scale_events,
+                node_pool_size=node_pool_size,
+                node_pool_delta=node_pool_delta,
+                grafana_url=deps["settings"].grafana.public_url,
+            ),
         )
 
     @router.get("/ui/alerts", response_class=HTMLResponse, include_in_schema=False)
@@ -175,10 +196,121 @@ def build_ui_router() -> APIRouter:  # noqa: PLR0915 — single factory register
         return templates.TemplateResponse(
             request,
             "alerts.html.j2",
-            {
-                "alerts": alerts,
-                "grafana_url": str(deps["settings"].grafana.url).rstrip("/"),
-            },
+            await _ctx(deps, alerts=alerts, grafana_url=deps["settings"].grafana.public_url),
+        )
+
+    # ── Workloads list + detail ──────────────────────────────────────
+    @router.get("/ui/workloads", response_class=HTMLResponse, include_in_schema=False)
+    async def ui_workloads(request: Request, deps: dict[str, Any] = DepsDep) -> HTMLResponse:
+        workloads: list[Workload] = []
+        try:
+            disc = WorkloadDiscovery.from_settings(deps["settings"].k8s)
+            workloads = await disc.list()
+        except Exception as exc:
+            log.warning("workloads_discovery_failed", error=str(exc))
+
+        # Build a per-workload summary: latest decision (if any), recent PRs.
+        summaries: list[dict[str, Any]] = []
+        audit: SQLAuditStore | None = deps["audit"]
+        recent: list[Any] = await audit.recent_decisions(limit=200) if audit else []
+        latest_by_uid: dict[str, Any] = {}
+        for d in recent:
+            latest_by_uid.setdefault(d.workload_uid, d)
+        for w in workloads:
+            d = latest_by_uid.get(w.uid)
+            summaries.append({"workload": w, "latest": d})
+        return templates.TemplateResponse(
+            request,
+            "workloads.html.j2",
+            await _ctx(deps, summaries=summaries),
+        )
+
+    @router.get(
+        "/ui/workloads/{namespace}/{name}",
+        response_class=HTMLResponse,
+        include_in_schema=False,
+    )
+    async def ui_workload_detail(
+        namespace: str,
+        name: str,
+        request: Request,
+        deps: dict[str, Any] = DepsDep,
+    ) -> HTMLResponse:
+        workload: Workload | None = None
+        try:
+            disc = WorkloadDiscovery.from_settings(deps["settings"].k8s)
+            for w in await disc.list():
+                if w.namespace == namespace and w.name == name:
+                    workload = w
+                    break
+        except Exception as exc:
+            log.warning("workload_discovery_failed", error=str(exc))
+
+        if workload is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, f"workload {namespace}/{name} not found")
+
+        # Pull last 6h of CPU + memory points via Grafana proxy for sparkline.
+        grafana: GrafanaClient | None = deps["grafana"]
+        cpu_points: list[float] = []
+        mem_points: list[float] = []
+        keda_health: list[dict[str, Any]] = []
+        keda_errors: list[dict[str, Any]] = []
+        if grafana is not None:
+            cpu_q = PromQLLibrary.render(
+                QueryName.CPU_USAGE_CORES, namespace=namespace, workload=name
+            )
+            mem_q = PromQLLibrary.render(
+                QueryName.MEMORY_WORKING_SET, namespace=namespace, workload=name
+            )
+            cpu_inst = await grafana.query_prometheus_instant(cpu_q)
+            mem_inst = await grafana.query_prometheus_instant(mem_q)
+            # We only get instant values without a range API on the client; so
+            # synthesize a single-point sparkline for v1.
+            import contextlib  # noqa: PLC0415
+
+            for r in cpu_inst:
+                with contextlib.suppress(KeyError, IndexError, ValueError, TypeError):
+                    cpu_points.append(float(r["value"][1]))
+            for r in mem_inst:
+                with contextlib.suppress(KeyError, IndexError, ValueError, TypeError):
+                    mem_points.append(float(r["value"][1]))
+            if workload.keda_scaledobject:
+                keda_errors = await grafana.query_prometheus_instant(
+                    PromQLLibrary.render(
+                        QueryName.KEDA_SCALER_ERRORS_TOTAL,
+                        namespace=namespace,
+                        scaledobject=workload.keda_scaledobject,
+                    )
+                )
+                keda_health = await grafana.query_prometheus_instant(
+                    PromQLLibrary.render(
+                        QueryName.KEDA_SCALER_ACTIVE,
+                        namespace=namespace,
+                        scaledobject=workload.keda_scaledobject,
+                    )
+                )
+
+        # Recent decisions for this workload
+        decisions_for_workload: list[Any] = []
+        audit: SQLAuditStore | None = deps["audit"]
+        if audit is not None:
+            for d in await audit.recent_decisions(limit=200):
+                if d.workload_uid == workload.uid:
+                    decisions_for_workload.append(d)
+
+        return templates.TemplateResponse(
+            request,
+            "workload_detail.html.j2",
+            await _ctx(
+                deps,
+                workload=workload,
+                cpu_points=cpu_points,
+                mem_points=mem_points,
+                keda_health=keda_health,
+                keda_errors=keda_errors,
+                decisions=decisions_for_workload[:25],
+                grafana_url=deps["settings"].grafana.public_url,
+            ),
         )
 
     # ── HTMX action endpoints ─────────────────────────────────────────
