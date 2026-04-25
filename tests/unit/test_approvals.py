@@ -215,10 +215,10 @@ def test_ui_alerts_handles_missing_grafana(client: TestClient) -> None:
     assert "Alerts" in r.text
 
 
-def test_ui_root_redirects_to_dashboard(client: TestClient) -> None:
+def test_ui_root_redirects_to_home(client: TestClient) -> None:
     r = client.get("/ui", follow_redirects=False)
     assert r.status_code == 302
-    assert r.headers["location"] == "/ui/dashboard"
+    assert r.headers["location"] == "/ui/home"
 
 
 def test_api_list_approvals_empty(client: TestClient) -> None:

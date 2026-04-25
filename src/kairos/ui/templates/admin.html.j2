@@ -1,0 +1,288 @@
+{% extends "base.html.j2" %}
+{% set active = "admin" %}
+{% block title %}Admin{% endblock %}
+{% block content %}
+
+{% macro flag_pill(on, label_on='enabled', label_off='disabled') %}
+  {% if on %}
+    <span class="pill pill-success">
+      <span class="w-1.5 h-1.5 rounded-full bg-current opacity-70"></span>
+      {{ label_on }}
+    </span>
+  {% else %}
+    <span class="pill pill-warn">
+      <span class="w-1.5 h-1.5 rounded-full bg-current opacity-70"></span>
+      {{ label_off }}
+    </span>
+  {% endif %}
+{% endmacro %}
+
+{# ── Hero ─────────────────────────────────────────────────────────── #}
+<div class="mb-8">
+  <h1 class="text-3xl font-bold tracking-tight mb-1">Admin</h1>
+  <p class="text-sm text-white/65 max-w-3xl">
+    Live configuration and connection status. Settings are loaded from environment variables and config
+    files at process startup — this page is the read-only mirror plus a connection tester. To change a value,
+    set its env var and restart the container.
+  </p>
+</div>
+
+{# ── Connections ────────────────────────────────────────────────── #}
+<h2 class="text-sm font-semibold uppercase tracking-widest text-white/55 mb-4">Connections</h2>
+<div class="glass overflow-hidden mb-12">
+  <table class="glass-table">
+    <thead><tr>
+      <th>Service</th>
+      <th>Configured</th>
+      <th>Status</th>
+      <th>Override via env var</th>
+      <th class="text-right">Actions</th>
+    </tr></thead>
+    <tbody>
+      {% set rows = [
+        {
+          "key":"grafana",
+          "name":"Grafana",
+          "url": grafana_url or "—",
+          "envs":["KAIROS_GRAFANA__URL","KAIROS_GRAFANA__EXTERNAL_URL","KAIROS_GRAFANA__API_TOKEN"],
+          "open_url": grafana_url,
+        },
+        {
+          "key":"mimir",
+          "name":"Mimir",
+          "url": mimir_url or "—",
+          "envs":["KAIROS_MIMIR__URL","KAIROS_MIMIR__ORG_ID","KAIROS_MIMIR__AUTH_BEARER"],
+          "open_url": mimir_url,
+        },
+        {
+          "key":"github",
+          "name":"GitHub",
+          "url": github_repo or "(not configured)",
+          "envs":["KAIROS_GITHUB__REPO","KAIROS_GITHUB__TOKEN","KAIROS_GITHUB__BASE_BRANCH"],
+          "open_url": github_url,
+        },
+        {
+          "key":"redis",
+          "name":"Redis (dedup)",
+          "url": redis_url or "—",
+          "envs":["KAIROS_REDIS__URL"],
+          "open_url": None,
+        },
+        {
+          "key":"db",
+          "name":"Audit DB",
+          "url": audit_db_url or "—",
+          "envs":["KAIROS_AUDIT_DB__URL"],
+          "open_url": None,
+        },
+      ] %}
+      {% for r in rows %}
+      <tr id="conn-{{ r.key }}">
+        <td>
+          <div class="font-semibold text-white/90">{{ r.name }}</div>
+        </td>
+        <td class="mono text-xs text-white/65" style="max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ r.url }}</td>
+        <td>
+          <span class="pill" id="conn-{{ r.key }}-state">
+            <span class="w-1.5 h-1.5 rounded-full bg-white/40"></span>
+            untested
+          </span>
+        </td>
+        <td>
+          <div class="flex flex-col gap-0.5">
+            {% for e in r.envs %}<span class="mono text-[11px] text-white/55">{{ e }}</span>{% endfor %}
+          </div>
+        </td>
+        <td class="text-right">
+          <div class="inline-flex gap-1.5">
+            {% if r.open_url %}
+            <a href="{{ r.open_url }}" target="_blank" rel="noopener" class="btn-glass btn-glass-sm">
+              <svg viewBox="0 0 24 24" class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M14 3h7v7M10 14L21 3"/></svg>
+              Open
+            </a>
+            {% endif %}
+            <button
+              hx-post="/api/v1/admin/test/{{ r.key }}"
+              hx-target="#conn-{{ r.key }}-state"
+              hx-swap="outerHTML"
+              class="btn-glass btn-glass-sm">
+              <svg viewBox="0 0 24 24" class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h5M20 20v-5h-5M4 20l16-16"/></svg>
+              Test
+            </button>
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{# ── Webhook URLs ───────────────────────────────────────────────── #}
+<h2 class="text-sm font-semibold uppercase tracking-widest text-white/55 mb-4">Inbound webhooks</h2>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-12">
+  <div class="glass p-5">
+    <div class="flex items-center gap-2 mb-2">
+      <span class="pill pill-info pill-mono">Grafana → Kairos</span>
+      <h3 class="text-base font-semibold tracking-tight">Alert webhook</h3>
+    </div>
+    <p class="text-sm text-white/65 leading-relaxed mb-3">
+      Configure a Grafana webhook contact point with this URL (auto-provisioned when KAIROS_API__EXTERNAL_URL + KAIROS_GRAFANA__API_TOKEN are set).
+    </p>
+    <div class="flex items-center gap-2">
+      <input class="glass-input flex-1 mono text-xs" readonly value="{{ alert_webhook_url }}" id="alert-webhook">
+      <button class="btn-glass btn-glass-sm" onclick="navigator.clipboard.writeText(document.getElementById('alert-webhook').value);window.toast('Webhook URL copied','success')">
+        <svg viewBox="0 0 24 24" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 5h-2a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1m-2-12h2a2 2 0 012 2v3m-12-5a2 2 0 002 2h4a2 2 0 002-2M8 5a2 2 0 012-2h4a2 2 0 012 2"/></svg>
+        Copy
+      </button>
+    </div>
+  </div>
+  <div class="glass p-5">
+    <div class="flex items-center gap-2 mb-2">
+      <span class="pill pill-info pill-mono">GitHub → Kairos</span>
+      <h3 class="text-base font-semibold tracking-tight">PR-merged webhook</h3>
+    </div>
+    <p class="text-sm text-white/65 leading-relaxed mb-3">
+      Configure a GitHub webhook on your GitOps repo with content-type <span class="mono">application/json</span> and the <em>Pull requests</em> event. Kairos closes the approval loop on merge.
+    </p>
+    <div class="flex items-center gap-2">
+      <input class="glass-input flex-1 mono text-xs" readonly value="{{ github_webhook_url }}" id="github-webhook">
+      <button class="btn-glass btn-glass-sm" onclick="navigator.clipboard.writeText(document.getElementById('github-webhook').value);window.toast('Webhook URL copied','success')">
+        <svg viewBox="0 0 24 24" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 5h-2a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1m-2-12h2a2 2 0 012 2v3m-12-5a2 2 0 002 2h4a2 2 0 002-2M8 5a2 2 0 012-2h4a2 2 0 012 2"/></svg>
+        Copy
+      </button>
+    </div>
+  </div>
+</div>
+
+{# ── Feature flags ──────────────────────────────────────────────── #}
+<h2 class="text-sm font-semibold uppercase tracking-widest text-white/55 mb-4">Feature flags</h2>
+<div class="glass p-5 mb-12">
+  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+    {% set flags = [
+      {"name":"dry_run", "on": settings.features.dry_run, "env":"KAIROS_FEATURES__DRY_RUN", "desc":"PR creation is logged but not actually opened"},
+      {"name":"require_ui_approval", "on": settings.features.require_ui_approval, "env":"KAIROS_FEATURES__REQUIRE_UI_APPROVAL", "desc":"Decisions queue for human review before PR"},
+      {"name":"enable_pr_creation", "on": settings.features.enable_pr_creation, "env":"KAIROS_FEATURES__ENABLE_PR_CREATION", "desc":"Open real GitHub PRs"},
+      {"name":"enable_notifications", "on": settings.features.enable_notifications, "env":"KAIROS_FEATURES__ENABLE_NOTIFICATIONS", "desc":"Send Teams/Slack/Email"},
+      {"name":"enable_grafana_provisioning", "on": settings.features.enable_grafana_provisioning, "env":"KAIROS_FEATURES__ENABLE_GRAFANA_PROVISIONING", "desc":"Provision dashboards + alert rules"},
+      {"name":"enable_llm", "on": settings.features.enable_llm, "env":"KAIROS_FEATURES__ENABLE_LLM", "desc":"LLM-narrated rationales on decisions"},
+      {"name":"enable_ui", "on": settings.features.enable_ui, "env":"KAIROS_FEATURES__ENABLE_UI", "desc":"Serve the /ui/* HTML routes"},
+      {"name":"allow_statefulset_auto_pr", "on": settings.features.allow_statefulset_auto_pr, "env":"KAIROS_FEATURES__ALLOW_STATEFULSET_AUTO_PR", "desc":"Auto-PR for StatefulSets (off by default for safety)"},
+    ] %}
+    {% for f in flags %}
+    <div class="flex flex-col gap-1 p-3 rounded-xl bg-white/[.03] border border-white/10">
+      <div class="flex items-center justify-between">
+        <span class="mono text-xs text-white/85">{{ f.name }}</span>
+        {{ flag_pill(f.on) }}
+      </div>
+      <span class="text-[11px] text-white/55 leading-snug">{{ f.desc }}</span>
+      <span class="mono text-[10px] text-white/40">{{ f.env }}</span>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+
+{# ── Discovery ─────────────────────────────────────────────────── #}
+<h2 class="text-sm font-semibold uppercase tracking-widest text-white/55 mb-4">Workload discovery</h2>
+<div class="glass p-5 mb-12">
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+    <div>
+      <div class="text-[11px] uppercase tracking-widest text-white/45 mb-1">Mode</div>
+      <div class="text-base font-semibold mono">{{ settings.k8s.mode }}</div>
+      <div class="text-[11px] text-white/55 mt-1">
+        {% if settings.k8s.mode == 'static' %}YAML file source — works without a cluster.
+        {% elif settings.k8s.mode == 'in_cluster' %}Reads K8s API using in-cluster ServiceAccount.
+        {% else %}Reads K8s API using local kubeconfig.
+        {% endif %}
+      </div>
+      <div class="mono text-[10px] text-white/40 mt-2">KAIROS_K8S__MODE</div>
+    </div>
+    <div>
+      <div class="text-[11px] uppercase tracking-widest text-white/45 mb-1">Namespaces</div>
+      {% if settings.k8s.namespaces %}
+        <div class="flex flex-wrap gap-1">
+          {% for ns in settings.k8s.namespaces %}<span class="pill pill-info pill-mono">{{ ns }}</span>{% endfor %}
+        </div>
+      {% else %}
+        <div class="text-sm text-white/55">all namespaces</div>
+      {% endif %}
+      <div class="mono text-[10px] text-white/40 mt-2">KAIROS_K8S__NAMESPACES</div>
+    </div>
+    <div>
+      <div class="text-[11px] uppercase tracking-widest text-white/45 mb-1">Static workloads file</div>
+      <div class="mono text-xs text-white/75 break-all">{{ settings.k8s.static_workloads_file or "—" }}</div>
+      <div class="mono text-[10px] text-white/40 mt-2">KAIROS_K8S__STATIC_WORKLOADS_FILE</div>
+    </div>
+  </div>
+  <div class="mt-4 pt-4 border-t border-white/10">
+    <div class="text-[11px] uppercase tracking-widest text-white/45 mb-2">Multi-tenant annotations Kairos reads from each Workload</div>
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-2 text-[11px]">
+      <div class="mono text-white/65">kairos.io/portfolio</div>
+      <div class="mono text-white/65">kairos.io/program</div>
+      <div class="mono text-white/65">kairos.io/team</div>
+      <div class="mono text-white/65">kairos.io/app-code</div>
+      <div class="mono text-white/65">kairos.io/keda-scaledobject</div>
+      <div class="mono text-white/65">kairos.io/gitops-path</div>
+      <div class="mono text-white/65">kairos.io/exclude</div>
+      <div class="mono text-white/65">kairos.io/workload-uid</div>
+    </div>
+  </div>
+</div>
+
+{# ── Forecasting + Decision ────────────────────────────────────── #}
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-12">
+  <div class="glass p-5">
+    <h3 class="text-sm font-semibold uppercase tracking-widest text-white/55 mb-3">Forecasting</h3>
+    <dl class="grid grid-cols-2 gap-y-2 text-sm">
+      <dt class="text-white/55">Horizon</dt><dd class="mono text-white/85">{{ settings.forecasting.horizon_hours }}h</dd>
+      <dt class="text-white/55">Lookback</dt><dd class="mono text-white/85">{{ settings.forecasting.lookback_days }}d</dd>
+      <dt class="text-white/55">Resolution</dt><dd class="mono text-white/85">{{ settings.forecasting.resolution_seconds }}s</dd>
+      <dt class="text-white/55">Min confidence</dt><dd class="mono text-white/85">{{ "%.2f"|format(settings.forecasting.min_confidence) }}</dd>
+      <dt class="text-white/55">Use Prophet</dt><dd>{{ flag_pill(settings.forecasting.use_prophet_if_available, 'yes', 'fallback') }}</dd>
+    </dl>
+  </div>
+  <div class="glass p-5">
+    <h3 class="text-sm font-semibold uppercase tracking-widest text-white/55 mb-3">Decision rules</h3>
+    <dl class="grid grid-cols-2 gap-y-2 text-sm">
+      <dt class="text-white/55">CPU headroom thr.</dt><dd class="mono text-white/85">{{ "%.2f"|format(settings.decision.cpu_headroom_threshold) }}</dd>
+      <dt class="text-white/55">Mem headroom thr.</dt><dd class="mono text-white/85">{{ "%.2f"|format(settings.decision.mem_headroom_threshold) }}</dd>
+      <dt class="text-white/55">Low-util thr.</dt><dd class="mono text-white/85">{{ "%.2f"|format(settings.decision.low_utilization_threshold) }}</dd>
+      <dt class="text-white/55">Low-util days</dt><dd class="mono text-white/85">{{ settings.decision.low_utilization_days }}d</dd>
+      <dt class="text-white/55">Max step replicas</dt><dd class="mono text-white/85">+{{ settings.decision.max_step_replicas }}</dd>
+      <dt class="text-white/55">Min replicas floor</dt><dd class="mono text-white/85">{{ settings.decision.min_replicas_floor }}</dd>
+    </dl>
+  </div>
+</div>
+
+{# ── Scheduler + Notifications ─────────────────────────────────── #}
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-12">
+  <div class="glass p-5">
+    <h3 class="text-sm font-semibold uppercase tracking-widest text-white/55 mb-3">Scheduler</h3>
+    <dl class="grid grid-cols-2 gap-y-2 text-sm">
+      <dt class="text-white/55">Enabled</dt><dd>{{ flag_pill(settings.scheduler.enabled) }}</dd>
+      <dt class="text-white/55">Interval</dt><dd class="mono text-white/85">{{ settings.scheduler.interval_minutes }} min</dd>
+      <dt class="text-white/55">Jitter</dt><dd class="mono text-white/85">±{{ settings.scheduler.jitter_seconds }}s</dd>
+      <dt class="text-white/55">Concurrency</dt><dd class="mono text-white/85">{{ settings.scheduler.max_concurrent_workloads }}</dd>
+    </dl>
+  </div>
+  <div class="glass p-5">
+    <h3 class="text-sm font-semibold uppercase tracking-widest text-white/55 mb-3">Notifications</h3>
+    <dl class="grid grid-cols-2 gap-y-2 text-sm">
+      <dt class="text-white/55">Teams</dt><dd>{{ flag_pill(teams_enabled, 'configured', 'not configured') }}</dd>
+      <dt class="text-white/55">Slack</dt><dd>{{ flag_pill(slack_enabled, 'configured', 'not configured') }}</dd>
+      <dt class="text-white/55">Email (SMTP)</dt><dd>{{ flag_pill(smtp_enabled, 'configured', 'not configured') }}</dd>
+    </dl>
+  </div>
+</div>
+
+{# ── Environment summary ───────────────────────────────────────── #}
+<h2 class="text-sm font-semibold uppercase tracking-widest text-white/55 mb-4">Environment</h2>
+<div class="glass p-5">
+  <dl class="grid grid-cols-2 md:grid-cols-4 gap-y-2 text-sm">
+    <dt class="text-white/55">Environment</dt><dd class="mono text-white/85">{{ settings.environment }}</dd>
+    <dt class="text-white/55">Version</dt><dd class="mono text-white/85">{{ settings.version }}</dd>
+    <dt class="text-white/55">API external URL</dt><dd class="mono text-white/85 truncate">{{ settings.api.external_url or "—" }}</dd>
+    <dt class="text-white/55">Tracing</dt><dd>{{ flag_pill(settings.tracing.enabled) }}</dd>
+  </dl>
+</div>
+
+{% endblock %}

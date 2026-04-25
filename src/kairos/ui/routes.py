@@ -60,6 +60,82 @@ async def _ctx(deps: dict[str, Any], **extra: Any) -> dict[str, Any]:
     }
 
 
+async def _probe_admin_service(  # noqa: PLR0911, PLR0912 — flat per-service dispatch is clearer than refactor
+    service: str, settings: Any, app_state: Any
+) -> tuple[str, str]:
+    """Probe one external dependency for the /ui/admin page.
+
+    Returns (state, detail) where state ∈ {ok, degraded, down, unconfigured}.
+    """
+    import httpx  # noqa: PLC0415
+
+    timeout = 3.0
+    if service == "grafana":
+        url = f"{str(settings.grafana.url).rstrip('/')}/api/health"
+        try:
+            async with httpx.AsyncClient(timeout=timeout) as c:
+                r = await c.get(url)
+            return ("ok", f"HTTP {r.status_code}") if r.status_code < 400 else (
+                "degraded",
+                f"HTTP {r.status_code}",
+            )
+        except Exception as exc:
+            return ("down", f"{type(exc).__name__}: {exc}")
+    if service == "mimir":
+        url = f"{str(settings.mimir.url).rstrip('/')}/ready"
+        try:
+            async with httpx.AsyncClient(timeout=timeout) as c:
+                r = await c.get(url)
+            return ("ok", f"HTTP {r.status_code}") if r.status_code < 500 else (
+                "down",
+                f"HTTP {r.status_code}",
+            )
+        except Exception as exc:
+            return ("down", f"{type(exc).__name__}: {exc}")
+    if service == "github":
+        if not settings.github.repo:
+            return ("unconfigured", "set KAIROS_GITHUB__REPO")
+        url = f"https://api.github.com/repos/{settings.github.repo}"
+        headers: dict[str, str] = {}
+        if settings.github.token is not None:
+            headers["Authorization"] = f"Bearer {settings.github.token.get_secret_value()}"
+        try:
+            async with httpx.AsyncClient(timeout=timeout) as c:
+                r = await c.get(url, headers=headers)
+            if r.status_code == 200:
+                return "ok", "200 · repo reachable"
+            if r.status_code == 401:
+                return "down", "401 · invalid token"
+            if r.status_code == 404:
+                return "down", "404 · repo not found"
+            return "degraded", f"HTTP {r.status_code}"
+        except Exception as exc:
+            return ("down", f"{type(exc).__name__}: {exc}")
+    if service == "redis":
+        try:
+            from kairos.storage.redis_client import RedisClient  # noqa: PLC0415
+
+            client = RedisClient.from_settings(settings.redis)
+            ok = await client.ping()
+            await client.close()
+            return ("ok", "PONG") if ok else ("down", "ping failed")
+        except Exception as exc:
+            return "down", f"{type(exc).__name__}: {exc}"
+    if service == "db":
+        db = getattr(app_state, "db", None)
+        if db is None:
+            return "down", "audit DB not bootstrapped"
+        try:
+            from sqlalchemy import text  # noqa: PLC0415
+
+            async with db.session() as s:
+                await s.execute(text("SELECT 1"))
+            return "ok", "SELECT 1"
+        except Exception as exc:
+            return "down", f"{type(exc).__name__}: {exc}"
+    return "unconfigured", f"unknown service: {service}"
+
+
 # ── Small response models for the JSON endpoints ──────────────────────
 class ApprovalAction(BaseModel):
     approved_by: str
@@ -78,7 +154,47 @@ def build_ui_router() -> APIRouter:  # noqa: PLR0915 — single factory register
     # ── HTML screens ──────────────────────────────────────────────────
     @router.get("/ui", response_class=HTMLResponse, include_in_schema=False)
     async def ui_root() -> RedirectResponse:
-        return RedirectResponse("/ui/dashboard", status_code=status.HTTP_302_FOUND)
+        return RedirectResponse("/ui/home", status_code=status.HTTP_302_FOUND)
+
+    @router.get("/ui/home", response_class=HTMLResponse, include_in_schema=False)
+    async def ui_home(request: Request, deps: dict[str, Any] = DepsDep) -> HTMLResponse:
+        s = deps["settings"]
+        gh_repo_url = f"https://github.com/{s.github.repo}" if s.github.repo else None
+        return templates.TemplateResponse(
+            request,
+            "home.html.j2",
+            await _ctx(
+                deps,
+                grafana_url=s.grafana.public_url,
+                github_url=gh_repo_url,
+            ),
+        )
+
+    @router.get("/ui/admin", response_class=HTMLResponse, include_in_schema=False)
+    async def ui_admin(request: Request, deps: dict[str, Any] = DepsDep) -> HTMLResponse:
+        s = deps["settings"]
+        gh_repo_url = f"https://github.com/{s.github.repo}" if s.github.repo else None
+        external = str(s.api.external_url).rstrip("/") if s.api.external_url else ""
+        alert_webhook_url = f"{external}/api/v1/alerts/webhook" if external else "(set KAIROS_API__EXTERNAL_URL to enable)"
+        github_webhook_url = f"{external}/api/v1/github/webhook" if external else "(set KAIROS_API__EXTERNAL_URL to enable)"
+        return templates.TemplateResponse(
+            request,
+            "admin.html.j2",
+            await _ctx(
+                deps,
+                grafana_url=s.grafana.public_url,
+                mimir_url=str(s.mimir.url).rstrip("/"),
+                github_url=gh_repo_url,
+                github_repo=s.github.repo,
+                redis_url=s.redis.url,
+                audit_db_url=s.audit_db.url,
+                alert_webhook_url=alert_webhook_url,
+                github_webhook_url=github_webhook_url,
+                teams_enabled=s.teams.webhook_url is not None,
+                slack_enabled=s.slack.webhook_url is not None or s.slack.bot_token is not None,
+                smtp_enabled=bool(s.smtp.host and s.smtp.to_addrs),
+            ),
+        )
 
     @router.get("/ui/dashboard", response_class=HTMLResponse, include_in_schema=False)
     async def ui_dashboard(request: Request, deps: dict[str, Any] = DepsDep) -> HTMLResponse:
@@ -323,6 +439,29 @@ def build_ui_router() -> APIRouter:  # noqa: PLR0915 — single factory register
             await s.commit()
             log.info("approval_merged_via_webhook", pr_number=pr_number, approval_id=row.id)
         return {"ok": True, "matched": True, "pr_number": pr_number}
+
+    # ── Admin: connection tests (HTMX-friendly HTML fragments) ───────
+    @router.post("/api/v1/admin/test/{service}", response_class=HTMLResponse, include_in_schema=False)
+    async def admin_test_connection(
+        service: str, request: Request, deps: dict[str, Any] = DepsDep
+    ) -> HTMLResponse:
+        s = deps["settings"]
+        state, detail = await _probe_admin_service(service, s, request.app.state)
+        cls = {
+            "ok": "pill pill-success",
+            "down": "pill pill-danger",
+            "degraded": "pill pill-warn",
+            "unconfigured": "pill",
+        }.get(state, "pill")
+        # Truncate long error messages
+        detail_short = (detail[:60] + "…") if len(detail) > 60 else detail
+        html = (
+            f'<span class="{cls}" id="conn-{service}-state" title="{detail}">'
+            f'<span class="w-1.5 h-1.5 rounded-full bg-current opacity-70"></span>'
+            f"{state} · {detail_short}"
+            f"</span>"
+        )
+        return HTMLResponse(html)
 
     # ── Workloads list + detail ──────────────────────────────────────
     @router.get("/ui/workloads", response_class=HTMLResponse, include_in_schema=False)

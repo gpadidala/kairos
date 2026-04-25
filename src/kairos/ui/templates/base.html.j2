@@ -391,7 +391,7 @@
 <div class="layout">
   <!-- ── Sidebar ─────────────────────────────────────────────── -->
   <aside class="sidebar">
-    <a href="/ui/dashboard" class="flex items-center gap-3 px-3 mb-4">
+    <a href="/ui/home" class="flex items-center gap-3 px-3 mb-4">
       <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-400 to-fuchsia-500 grid place-items-center shadow-lg ring-1 ring-white/20">
         <svg viewBox="0 0 24 24" class="w-5 h-5 text-white" fill="none" stroke="currentColor" stroke-width="2.5">
           <path stroke-linecap="round" stroke-linejoin="round" d="M3 17l4-4 4 4 4-8 6 8" />
@@ -401,6 +401,11 @@
         <div class="text-base font-semibold tracking-tight">KAIROS</div>
         <div class="text-[10px] uppercase tracking-widest text-white/50">Predictive Capacity</div>
       </div>
+    </a>
+
+    <a href="/ui/home" class="sidebar-link {% if active == 'home' %}active{% endif %}">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 12l9-9 9 9M5 10v10h14V10"/></svg>
+      Home
     </a>
 
     <div class="sidebar-section">Capacity</div>
@@ -433,6 +438,10 @@
     </a>
 
     <div class="sidebar-section">System</div>
+    <a href="/ui/admin" class="sidebar-link {% if active == 'admin' %}active{% endif %}">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><circle cx="12" cy="12" r="3"/></svg>
+      Admin
+    </a>
     <a href="/docs" class="sidebar-link" target="_blank" rel="noopener">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
       API Docs
@@ -552,12 +561,14 @@
   const input   = document.getElementById("palette-input");
   const list    = document.getElementById("palette-list");
   const cmds = [
+    {label: "Home",            href: "/ui/home",      hint: "g i"},
     {label: "Overview",        href: "/ui/dashboard", hint: "g o"},
     {label: "Pending approvals", href: "/ui/pending",  hint: "g p"},
     {label: "Workloads",       href: "/ui/workloads", hint: "g w"},
     {label: "History",         href: "/ui/history",   hint: "g h"},
     {label: "KEDA Activity",   href: "/ui/keda",      hint: "g k"},
     {label: "Alerts",          href: "/ui/alerts",    hint: "g a"},
+    {label: "Admin",           href: "/ui/admin",     hint: "g s"},
     {label: "API Docs",        href: "/docs",         hint: ""},
     {label: "Metrics",         href: "/metrics",      hint: ""},
     {label: "GitHub",          href: "https://github.com/gpadidala/kairos", hint: ""},
