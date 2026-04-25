@@ -41,7 +41,7 @@ async def require_auth(request: Request, credentials: BearerDep) -> None:
 
 
 @asynccontextmanager
-async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
+async def _lifespan(app: FastAPI) -> AsyncIterator[None]:  # noqa: PLR0915
     settings: Settings = app.state.settings
     configure_logging(settings)
     configure_tracing(settings)
@@ -63,6 +63,10 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         app.state.approvals = ApprovalStore(
             db, pending_ttl_hours=settings.audit_db.pending_ttl_hours
         )
+        # Incoming-alerts store (Grafana webhook receiver target)
+        from kairos.storage.alerts import IncomingAlertStore  # noqa: PLC0415
+
+        app.state.incoming_alerts = IncomingAlertStore(db)
     except Exception as exc:
         log.warning("audit_db_bootstrap_failed", error=str(exc))
 
@@ -72,6 +76,18 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         from kairos.grafana.grafana_client import GrafanaClient  # noqa: PLC0415
 
         app.state.grafana_client = GrafanaClient(settings.grafana)
+        # Auto-provision a webhook contact point in Grafana so it knows where
+        # to send Kairos-bound alerts. Best-effort: failures don't block startup.
+        if settings.grafana.api_token is not None and settings.api.external_url is not None:
+            try:
+                from kairos.grafana.contact_points import (  # noqa: PLC0415
+                    ensure_kairos_contact_point,
+                )
+
+                webhook = f"{str(settings.api.external_url).rstrip('/')}/api/v1/alerts/webhook"
+                await ensure_kairos_contact_point(app.state.grafana_client, webhook_url=webhook)
+            except Exception as exc:
+                log.info("grafana_contact_point_provision_skipped", error=str(exc))
     except Exception as exc:
         log.info("grafana_client_unavailable", error=str(exc))
 

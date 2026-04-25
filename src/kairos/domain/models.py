@@ -10,6 +10,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl, field_validator, model_validator
 
 from kairos.domain.enums import (
+    AlertState,
     ApprovalStatus,
     ForecastModel,
     LLMProviderName,
@@ -55,6 +56,11 @@ class Workload(BaseModel):
         default=None,
         description="Path inside the GitOps repo where this workload's manifest lives.",
     )
+    # Enterprise hierarchy: Portfolio > Program > App > Service
+    portfolio: str | None = Field(default=None, max_length=128)
+    program: str | None = Field(default=None, max_length=128)
+    team: str | None = Field(default=None, max_length=128)
+    app_code: str | None = Field(default=None, max_length=64)
 
     @field_validator("cpu_request", "cpu_limit")
     @classmethod
@@ -303,6 +309,35 @@ class GrafanaAlert(BaseModel):
     labels: dict[str, str] = Field(default_factory=dict)
     summary: str | None = None
     starts_at: datetime | None = None
+
+
+class IncomingAlert(BaseModel):
+    """An alert received from Grafana via webhook + lifecycle state.
+
+    Maps both the firing and resolved payloads from Grafana's unified alerting
+    contact-point webhook (https://grafana.com/docs/grafana/latest/alerting/configure-notifications/manage-contact-points/integrations/webhook-notifier/).
+    """
+
+    model_config = _strict()
+
+    id: str
+    fingerprint: str = Field(min_length=1)
+    title: str = Field(min_length=1)
+    state: AlertState
+    severity: str = "info"
+    summary: str | None = None
+    description: str | None = None
+    workload_uid: str | None = None  # parsed from labels.workload / kairos.io annotations
+    labels: dict[str, str] = Field(default_factory=dict)
+    annotations: dict[str, str] = Field(default_factory=dict)
+    starts_at: datetime | None = None
+    ends_at: datetime | None = None
+    received_at: datetime
+    acknowledged_at: datetime | None = None
+    acknowledged_by: str | None = None
+    silence_url: str | None = None
+    panel_url: str | None = None
+    raw_json: dict[str, object] = Field(default_factory=dict)
 
 
 class RunResult(BaseModel):

@@ -29,7 +29,7 @@ class RedisClient:
 
     @classmethod
     def from_settings(cls, settings: RedisSettings) -> RedisClient:
-        client: Redis = aioredis.from_url(
+        client: Redis = aioredis.from_url(  # type: ignore[no-untyped-call]
             settings.url,
             socket_timeout=settings.timeout_seconds,
             socket_connect_timeout=settings.timeout_seconds,
@@ -43,7 +43,7 @@ class RedisClient:
 
     async def ping(self) -> bool:
         try:
-            await self._client.ping()  # type: ignore[misc]
+            await self._client.ping()
         except Exception as exc:
             self._healthy = False
             log.warning("redis_ping_failed", error=str(exc))

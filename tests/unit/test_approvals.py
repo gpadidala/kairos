@@ -212,7 +212,7 @@ def test_ui_keda_panel_handles_missing_grafana(client: TestClient) -> None:
 def test_ui_alerts_handles_missing_grafana(client: TestClient) -> None:
     r = client.get("/ui/alerts")
     assert r.status_code == 200
-    assert "Active Alerts" in r.text
+    assert "Alerts" in r.text
 
 
 def test_ui_root_redirects_to_dashboard(client: TestClient) -> None:

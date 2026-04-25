@@ -48,6 +48,13 @@
         <td>
           <a href="/ui/workloads/{{ w.namespace }}/{{ w.name }}" class="font-semibold tracking-tight">{{ w.name }}</a>
           <div class="text-[11px] text-white/45 mono">{{ w.kind.value }} · {{ w.namespace }}</div>
+          {% if w.portfolio or w.program or w.team %}
+          <div class="mt-1 flex flex-wrap gap-1">
+            {% if w.portfolio %}<span class="pill pill-mono text-[9px]" title="portfolio">📁 {{ w.portfolio }}</span>{% endif %}
+            {% if w.program %}<span class="pill pill-mono text-[9px]" title="program">▣ {{ w.program }}</span>{% endif %}
+            {% if w.team %}<span class="pill pill-mono text-[9px]" title="team">👥 {{ w.team }}</span>{% endif %}
+          </div>
+          {% endif %}
         </td>
         <td><span class="pill pill-mono">{{ w.runtime.value }}</span></td>
         <td class="text-right mono text-sm">{{ w.current_replicas }}</td>

@@ -11,7 +11,7 @@ from kairos.domain.models import Forecast, MetricPoint, MetricSeries
 from kairos.forecasting.base import Forecaster, ForecastRequest
 
 if TYPE_CHECKING:  # pragma: no cover
-    import pandas as pd
+    import pandas as pd  # type: ignore[import-untyped]
 
 
 try:

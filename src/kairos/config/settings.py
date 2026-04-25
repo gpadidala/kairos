@@ -177,6 +177,10 @@ class FeatureFlags(BaseModel):
 class APISettings(BaseModel):
     host: str = "0.0.0.0"  # noqa: S104 — intentional bind-all in container
     port: int = Field(default=8080, ge=1, le=65535)
+    # Externally-reachable URL for this Kairos instance — used to build the
+    # webhook URL Grafana POSTs to + GitHub posts merged-PR events to. Inside
+    # docker compose the bundled Grafana reaches us via http://kairos:8080.
+    external_url: HttpUrl | None = None
     token_sha256_list: list[str] = Field(
         default_factory=list,
         description="SHA-256 hex digests of accepted bearer tokens. Empty = auth disabled.",

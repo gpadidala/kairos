@@ -65,7 +65,7 @@ class K8sApiWorkloadSource(WorkloadSource):
             ) from exc
 
         try:
-            config.load_incluster_config()  # type: ignore[no-untyped-call]
+            config.load_incluster_config()
         except Exception:
             try:
                 await config.load_kube_config()
@@ -139,6 +139,10 @@ def _k8s_obj_to_workload(obj: Any, kind: WorkloadKind) -> Workload | None:  # pr
         mem_limit=mem_lim,
         keda_scaledobject=annotations.get("kairos.io/keda-scaledobject"),
         gitops_path=annotations.get("kairos.io/gitops-path"),
+        portfolio=annotations.get("kairos.io/portfolio"),
+        program=annotations.get("kairos.io/program"),
+        team=annotations.get("kairos.io/team"),
+        app_code=annotations.get("kairos.io/app-code"),
     )
 
 

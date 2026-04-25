@@ -78,4 +78,13 @@ class ApprovalStatus(StrEnum):
     REJECTED = "rejected"
     EXPIRED = "expired"
     APPLIED = "applied"  # approved AND PR opened
+    MERGED = "merged"  # PR was merged via GitHub webhook
     FAILED = "failed"  # approved but PR creation failed
+
+
+class AlertState(StrEnum):
+    """Lifecycle state for an alert received from Grafana via webhook."""
+
+    FIRING = "firing"
+    RESOLVED = "resolved"
+    ACKNOWLEDGED = "acknowledged"

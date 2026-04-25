@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated, Any
 
@@ -188,16 +189,125 @@ def build_ui_router() -> APIRouter:  # noqa: PLR0915 — single factory register
 
     @router.get("/ui/alerts", response_class=HTMLResponse, include_in_schema=False)
     async def ui_alerts(request: Request, deps: dict[str, Any] = DepsDep) -> HTMLResponse:
+        # Two sources merged: live Grafana alerts AND alerts received via webhook
         grafana: GrafanaClient | None = deps["grafana"]
-        alerts: list[GrafanaAlert] = []
+        live_alerts: list[GrafanaAlert] = []
         if grafana is not None:
             raw = await grafana.list_active_alerts()
-            alerts = [_coerce_alert(a) for a in raw]
+            live_alerts = [_coerce_alert(a) for a in raw]
+        # Webhook-received alerts (from Grafana contact point)
+        from kairos.domain.enums import AlertState  # noqa: PLC0415
+
+        alert_store = getattr(request.app.state, "incoming_alerts", None)
+        firing: list[Any] = []
+        recent: list[Any] = []
+        if alert_store is not None:
+            firing = await alert_store.list_recent(limit=50, states=(AlertState.FIRING,))
+            recent = await alert_store.list_recent(
+                limit=50,
+                states=(AlertState.RESOLVED, AlertState.ACKNOWLEDGED),
+            )
+        # Compute the Grafana-side webhook URL the operator should configure
+        api_url = str(deps["settings"].api.external_url or "").rstrip("/")
+        if not api_url:
+            api_url = f"http://localhost:{deps['settings'].api.port}"
+        webhook_url = f"{api_url}/api/v1/alerts/webhook"
         return templates.TemplateResponse(
             request,
             "alerts.html.j2",
-            await _ctx(deps, alerts=alerts, grafana_url=deps["settings"].grafana.public_url),
+            await _ctx(
+                deps,
+                live_alerts=live_alerts,
+                firing=firing,
+                recent=recent,
+                grafana_url=deps["settings"].grafana.public_url,
+                webhook_url=webhook_url,
+            ),
         )
+
+    # ── Alert webhook receiver (Grafana contact point posts here) ────
+    @router.post("/api/v1/alerts/webhook", include_in_schema=True, status_code=202)
+    async def receive_alert_webhook(
+        request: Request,
+        deps: dict[str, Any] = DepsDep,
+    ) -> dict[str, Any]:
+        """Accept Grafana's webhook payload, normalize, persist."""
+        from kairos.storage.alerts import parse_grafana_webhook  # noqa: PLC0415
+
+        store = getattr(request.app.state, "incoming_alerts", None)
+        if store is None:
+            raise HTTPException(
+                status.HTTP_503_SERVICE_UNAVAILABLE,
+                "alert store not configured",
+            )
+        try:
+            payload = await request.json()
+        except Exception as exc:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, f"invalid JSON: {exc}") from exc
+        normalized = parse_grafana_webhook(payload if isinstance(payload, dict) else {})
+        n = await store.upsert_many(normalized)
+        log.info(
+            "alert_webhook_received",
+            count=len(normalized),
+            stored=n,
+            receiver=payload.get("receiver") if isinstance(payload, dict) else None,
+        )
+        return {"ok": True, "received": len(normalized), "stored": n}
+
+    # ── Acknowledge an alert from the UI ─────────────────────────────
+    @router.post("/ui/alerts/{alert_id}/ack", include_in_schema=False)
+    async def htmx_ack_alert(
+        alert_id: str,
+        request: Request,
+        deps: dict[str, Any] = DepsDep,
+        acknowledged_by: str = Form(default="ui-user"),
+    ) -> HTMLResponse:
+        store = getattr(request.app.state, "incoming_alerts", None)
+        if store is None:
+            raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "alert store not configured")
+        result = await store.acknowledge(alert_id, by=acknowledged_by)
+        if result is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "alert not found")
+        return HTMLResponse("")  # HTMX swap removes the row
+
+    # ── GitHub webhook (pull_request closed → mark approval merged) ──
+    @router.post("/api/v1/github/webhook", include_in_schema=True, status_code=202)
+    async def github_webhook(request: Request, deps: dict[str, Any] = DepsDep) -> dict[str, Any]:
+        """Receive GitHub PR webhooks. We only act on `pull_request.closed`+merged."""
+        try:
+            payload = await request.json()
+        except Exception as exc:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, f"invalid JSON: {exc}") from exc
+        if not isinstance(payload, dict):
+            return {"ok": True, "ignored": "not_dict"}
+        action = payload.get("action")
+        pr = payload.get("pull_request") or {}
+        if action != "closed" or not pr.get("merged"):
+            return {"ok": True, "ignored": f"action={action} merged={pr.get('merged')}"}
+
+        pr_number = int(pr.get("number") or 0)
+        # Find the matching approval by pr_number, mark as merged
+        approvals: ApprovalStore | None = deps["approvals"]
+        if approvals is None:
+            return {"ok": True, "ignored": "approvals_disabled"}
+        from sqlalchemy import select as _select  # noqa: PLC0415
+
+        from kairos.storage.db import ApprovalRow  # noqa: PLC0415
+
+        db = getattr(request.app.state, "db", None)
+        if db is None:
+            return {"ok": True, "ignored": "db_disabled"}
+        async with db.session() as s:
+            stmt = _select(ApprovalRow).where(ApprovalRow.pr_number == pr_number)
+            row = (await s.execute(stmt)).scalar_one_or_none()
+            if row is None:
+                log.info("github_webhook_no_match", pr_number=pr_number)
+                return {"ok": True, "matched": False}
+            row.status = "merged"
+            row.updated_at = datetime.now(UTC)
+            await s.commit()
+            log.info("approval_merged_via_webhook", pr_number=pr_number, approval_id=row.id)
+        return {"ok": True, "matched": True, "pr_number": pr_number}
 
     # ── Workloads list + detail ──────────────────────────────────────
     @router.get("/ui/workloads", response_class=HTMLResponse, include_in_schema=False)

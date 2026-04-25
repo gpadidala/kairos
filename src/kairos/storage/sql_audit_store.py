@@ -11,6 +11,7 @@ from sqlalchemy import desc, select
 from kairos.domain.enums import ApprovalStatus
 from kairos.domain.models import NotificationResult, PRResult, RunResult, ScalingDecision
 from kairos.storage.db import (
+    AlertRow,
     ApprovalRow,
     Database,
     DecisionRow,
@@ -158,10 +159,16 @@ class SQLAuditStore:
                 .scalars()
                 .all()
             )
+            firing = (
+                (await s.execute(select(AlertRow).where(AlertRow.state == "firing")))
+                .scalars()
+                .all()
+            )
             return {
                 "decisions_today": len(dec),
                 "prs_today": len(prs),
                 "pending_approvals": len(pending),
+                "alerts_firing": len(firing),
             }
 
     async def aclose(self) -> None:

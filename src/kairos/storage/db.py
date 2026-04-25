@@ -106,6 +106,34 @@ class NotificationRow(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
 
 
+class AlertRow(Base):
+    """Alerts received from Grafana via webhook."""
+
+    __tablename__ = "alerts"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    fingerprint: Mapped[str] = mapped_column(String(64), index=True)
+    title: Mapped[str] = mapped_column(String(255))
+    state: Mapped[str] = mapped_column(String(16), index=True)
+    severity: Mapped[str] = mapped_column(String(16), index=True)
+    summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    workload_uid: Mapped[str | None] = mapped_column(String(253), nullable=True, index=True)
+    portfolio: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    program: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    team: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    labels_json: Mapped[dict[str, object]] = mapped_column(JSON)
+    annotations_json: Mapped[dict[str, object]] = mapped_column(JSON)
+    starts_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    ends_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    acknowledged_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    acknowledged_by: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    silence_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    panel_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    raw_json: Mapped[dict[str, object]] = mapped_column(JSON)
+
+
 class Database:
     """Owns the async engine + sessionmaker."""
 

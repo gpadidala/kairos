@@ -106,6 +106,9 @@ services:
       # ── API ──────────────────────────────────────────────────────
       KAIROS_API__PORT: "8080"
       KAIROS_API__TOKEN_SHA256_LIST: ${KAIROS_API_TOKEN_SHA256_LIST:-}
+      # External URL Grafana + GitHub reach Kairos at — used to build the
+      # webhook URL Kairos auto-provisions in Grafana's contact points.
+      KAIROS_API__EXTERNAL_URL: ${KAIROS_API_EXTERNAL_URL:-http://kairos:8080}
       # ── Feature toggles ──────────────────────────────────────────
       KAIROS_FEATURES__ENABLE_UI: ${KAIROS_FEATURES_ENABLE_UI:-true}
       KAIROS_FEATURES__REQUIRE_UI_APPROVAL: ${KAIROS_FEATURES_REQUIRE_UI_APPROVAL:-true}

@@ -168,6 +168,8 @@ module = [
     "ruamel.*",
     "fakeredis.*",
     "prometheus_client.*",
+    "kubernetes_asyncio.*",
+    "yaml",
 ]
 ignore_missing_imports = true
 follow_imports = "skip"

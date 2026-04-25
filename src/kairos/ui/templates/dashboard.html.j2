@@ -2,85 +2,145 @@
 {% set active = "dashboard" %}
 {% block title %}Overview{% endblock %}
 {% block content %}
-<div class="mb-8">
-  <h1 class="text-3xl font-bold tracking-tight mb-1">Overview</h1>
-  <p class="text-sm text-white/55">
+
+<!-- ── Hero ─────────────────────────────────────────────────────── -->
+<div class="mb-10">
+  <div class="flex items-center gap-2 text-xs uppercase tracking-widest text-white/45 mb-2">
+    <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.7)]"></span>
+    Predictive Capacity & Autoscaling Platform
+  </div>
+  <h1 class="text-4xl font-bold tracking-tight mb-3">Kairos</h1>
+  <p class="text-base text-white/70 leading-relaxed max-w-3xl">
+    Augments KEDA with 48-hour CPU/memory forecasts. Predicts when a workload will need more capacity,
+    queues the change for human approval, and opens a GitOps PR. KEDA still handles the reactive
+    minute-by-minute scaling — Kairos handles the planning.
+  </p>
+  <p class="text-sm text-white/45 mt-2 mono">
     {{ settings.environment }} ·
-    <span class="mono">dry_run={{ settings.features.dry_run }}</span> ·
-    <span class="mono">require_ui_approval={{ settings.features.require_ui_approval }}</span>
+    dry_run={{ settings.features.dry_run }} ·
+    require_ui_approval={{ settings.features.require_ui_approval }}
   </p>
 </div>
 
-<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-10">
-  <div class="glass p-5">
-    <div class="flex items-center justify-between mb-3">
-      <span class="text-[11px] uppercase tracking-widest text-white/50">Pending</span>
-      <span class="w-2 h-2 rounded-full bg-amber-400 shadow-[0_0_12px_rgba(251,191,36,0.7)] animate-pulse"></span>
-    </div>
-    <div class="stat-number">{{ counters.pending_approvals }}</div>
-    <a href="/ui/pending" class="inline-flex items-center gap-1 text-xs text-blue-300 hover:text-blue-200 mt-3">
-      Review
-      <svg viewBox="0 0 24 24" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5">
-        <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
+<!-- ── Tool stack ────────────────────────────────────────────────── -->
+<h2 class="text-sm font-semibold uppercase tracking-widest text-white/55 mb-4">Tool stack</h2>
+<div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-12">
+  {% set tools = [
+    {"name": "KEDA",     "subtitle": "reactive autoscaler",      "color": "from-amber-400 to-orange-500",    "detail": "ScaledObjects watch event sources and scale Deployments/StatefulSets/DaemonSets in real time"},
+    {"name": "Mimir",    "subtitle": "long-term TSDB",           "color": "from-indigo-400 to-fuchsia-500",  "detail": "Stores 14d+ of cluster metrics for Kairos's PromQL forecasting queries"},
+    {"name": "Grafana",  "subtitle": "dashboards + alerting",    "color": "from-rose-400 to-pink-500",       "detail": "Visualizes predictions; routes alerts to Kairos via webhook contact point"},
+    {"name": "Kairos",   "subtitle": "predictive control plane", "color": "from-blue-400 to-cyan-500",       "detail": "48h forecasts, decision rules R-001..R-008, approval queue, GitOps PR automation"},
+    {"name": "GitHub",   "subtitle": "GitOps source of truth",   "color": "from-slate-400 to-zinc-500",      "detail": "Receives auto-generated PRs editing replicas / requests / minReplicaCount"},
+  ] %}
+  {% for t in tools %}
+  <div class="glass p-4">
+    <div class="w-9 h-9 rounded-xl bg-gradient-to-br {{ t.color }} grid place-items-center mb-3 ring-1 ring-white/15"></div>
+    <div class="text-base font-semibold tracking-tight">{{ t.name }}</div>
+    <div class="text-[10px] uppercase tracking-widest text-white/45 mt-0.5">{{ t.subtitle }}</div>
+    <div class="text-[11px] text-white/55 mt-2 leading-snug">{{ t.detail }}</div>
+  </div>
+  {% endfor %}
+</div>
+
+<!-- ── How it works (6-stage flow) ──────────────────────────────── -->
+<h2 class="text-sm font-semibold uppercase tracking-widest text-white/55 mb-4">How it works</h2>
+<div class="glass-strong p-6 mb-12">
+  <div class="grid grid-cols-1 md:grid-cols-6 gap-3">
+    {% set stages = [
+      {"n":1, "title":"Integrate", "body":"KEDA ScaledObjects on your Deployments / StatefulSets / DaemonSets. Alloy → Mimir ingestion. Grafana datasource provisioned. Kairos discovers workloads via static YAML or k8s API.", "icon":"M4 7l8-4 8 4M4 7v10l8 4 8-4V7M4 7l8 4 8-4M12 11v10"},
+      {"n":2, "title":"Predict",   "body":"Every 5–30 min Kairos pulls 14d of metrics from Mimir, runs Prophet (or statistical fallback), and produces a 48h forecast per workload + per metric.", "icon":"M3 12l2-2 4 4 8-8 4 4"},
+      {"n":3, "title":"Decide",    "body":"Deterministic rules R-001..R-008 turn forecasts into ScalingDecisions: HORIZONTAL_UP / VERTICAL_UP / KEDA_PRESCALE / NOOP / HUMAN_APPROVAL_REQUIRED.", "icon":"M9 12l2 2 4-4M21 12c0 4.97-4.03 9-9 9s-9-4.03-9-9 4.03-9 9-9 9 4.03 9 9z"},
+      {"n":4, "title":"Alert",     "body":"Grafana evaluates Kairos-provisioned alert rules every 5 min. Firing alerts route through a webhook contact point back into Kairos UI plus email.", "icon":"M12 9v3.75m0 6.5h.008v.008H12v-.008zm-9.36-1.81a1.5 1.5 0 011.305-2.252h16.11a1.5 1.5 0 011.305 2.252l-8.055 13.96a1.5 1.5 0 01-2.61 0l-8.055-13.96z"},
+      {"n":5, "title":"Approve",   "body":"Human reviewer approves on /ui/pending. Kairos opens a GitOps PR editing replicas / cpu_request / mem_request. Reviewer merges; Argo CD applies.", "icon":"M5 13l4 4L19 7"},
+      {"n":6, "title":"Resolve",   "body":"Once the change lands and load drops, Grafana auto-resolves the alert. Kairos receives the resolution webhook and marks the alert closed in /ui/alerts.", "icon":"M9 12h6M9 16h6M9 8h6M5 21h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v14a2 2 0 002 2z"},
+    ] %}
+    {% for s in stages %}
+    <div class="relative">
+      <div class="glass p-4 h-full">
+        <div class="flex items-center gap-2 mb-2">
+          <span class="w-7 h-7 rounded-lg bg-gradient-to-br from-blue-400/40 to-indigo-500/40 grid place-items-center text-xs font-bold text-white ring-1 ring-white/20">{{ s.n }}</span>
+          <span class="text-sm font-semibold tracking-tight">{{ s.title }}</span>
+        </div>
+        <svg viewBox="0 0 24 24" class="w-5 h-5 text-blue-300/80 mb-2" fill="none" stroke="currentColor" stroke-width="1.8">
+          <path stroke-linecap="round" stroke-linejoin="round" d="{{ s.icon }}"/>
+        </svg>
+        <p class="text-[11px] text-white/65 leading-snug">{{ s.body }}</p>
+      </div>
+      {% if not loop.last %}
+      <svg class="hidden md:block absolute top-1/2 -right-2 -translate-y-1/2 z-10 w-4 h-4 text-white/30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/>
       </svg>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+</div>
+
+<!-- ── Where things happen ──────────────────────────────────────── -->
+<h2 class="text-sm font-semibold uppercase tracking-widest text-white/55 mb-4">Where things happen</h2>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-12">
+  <div class="glass p-5">
+    <div class="flex items-center gap-2 mb-2">
+      <span class="pill pill-info pill-mono">human action</span>
+      <h3 class="text-base font-semibold tracking-tight">Approvals</h3>
+    </div>
+    <p class="text-sm text-white/65 leading-relaxed mb-3">
+      Every non-NOOP scaling decision lands in <a href="/ui/pending">/ui/pending</a> as a card with the proposed change, the rationale, the forecast, and a confidence score. Reviewers approve or reject — approval triggers the GitOps PR.
+    </p>
+    <a href="/ui/pending" class="btn-glass btn-glass-sm">
+      <svg viewBox="0 0 24 24" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+      Review pending
+      {% if counters.pending_approvals > 0 %}
+        <span class="ml-1 px-1.5 py-0.5 rounded-md bg-amber-400/30 text-amber-100 text-[10px] font-bold">{{ counters.pending_approvals }}</span>
+      {% endif %}
     </a>
   </div>
 
   <div class="glass p-5">
-    <div class="flex items-center justify-between mb-3">
-      <span class="text-[11px] uppercase tracking-widest text-white/50">Decisions today</span>
-      <svg viewBox="0 0 24 24" class="w-4 h-4 text-white/40" fill="none" stroke="currentColor" stroke-width="2">
-        <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
-      </svg>
+    <div class="flex items-center gap-2 mb-2">
+      <span class="pill pill-warn pill-mono">automated</span>
+      <h3 class="text-base font-semibold tracking-tight">Alerts in this UI</h3>
     </div>
-    <div class="stat-number">{{ counters.decisions_today }}</div>
-    <p class="text-xs text-white/40 mt-3">{{ recent_runs | length }} recent runs</p>
-  </div>
-
-  <div class="glass p-5">
-    <div class="flex items-center justify-between mb-3">
-      <span class="text-[11px] uppercase tracking-widest text-white/50">PRs today</span>
-      <svg viewBox="0 0 24 24" class="w-4 h-4 text-white/40" fill="none" stroke="currentColor" stroke-width="2">
-        <path stroke-linecap="round" stroke-linejoin="round" d="M8 7l-4 4 4 4M16 7l4 4-4 4M14 4l-4 16" />
-      </svg>
-    </div>
-    <div class="stat-number">{{ counters.prs_today }}</div>
-    <p class="text-xs text-white/40 mt-3">Opened against GitOps repo</p>
-  </div>
-
-  <div class="glass p-5">
-    <div class="flex items-center justify-between mb-3">
-      <span class="text-[11px] uppercase tracking-widest text-white/50">Status mix</span>
-      <svg viewBox="0 0 24 24" class="w-4 h-4 text-white/40" fill="none" stroke="currentColor" stroke-width="2">
-        <path stroke-linecap="round" stroke-linejoin="round" d="M3 12l2-2 4 4 8-8 4 4" />
-      </svg>
-    </div>
-    <ul class="text-xs space-y-1.5 mt-1">
-      {% for status, count in status_counts.items() %}
-        <li class="flex items-center justify-between">
-          <span class="pill pill-mono
-            {% if status == 'applied' %}pill-success
-            {% elif status == 'rejected' %}pill-warn
-            {% elif status == 'failed' %}pill-danger
-            {% elif status == 'pending' %}pill-info
-            {% endif %}">{{ status }}</span>
-          <span class="font-semibold text-white/85">{{ count }}</span>
-        </li>
-      {% else %}
-        <li class="text-white/40 text-xs mt-1">No data yet</li>
-      {% endfor %}
-    </ul>
+    <p class="text-sm text-white/65 leading-relaxed mb-3">
+      Grafana fires alerts based on the recording rules Kairos provisions. A webhook contact point routes them to Kairos's <span class="mono">/api/v1/alerts/webhook</span>. They show on <a href="/ui/alerts">/ui/alerts</a> with firing / resolved state and an Acknowledge button.
+    </p>
+    <a href="/ui/alerts" class="btn-glass btn-glass-sm">
+      <svg viewBox="0 0 24 24" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m0 6.5h.008v.008H12v-.008zm-9.36-1.81a1.5 1.5 0 011.305-2.252h16.11a1.5 1.5 0 011.305 2.252l-8.055 13.96a1.5 1.5 0 01-2.61 0l-8.055-13.96z"/></svg>
+      View alerts
+    </a>
   </div>
 </div>
 
-<div class="flex items-center justify-between mb-4">
-  <h2 class="text-lg font-semibold tracking-tight">Recent runs</h2>
+<!-- ── Live counters ────────────────────────────────────────────── -->
+<h2 class="text-sm font-semibold uppercase tracking-widest text-white/55 mb-4">Live snapshot</h2>
+<div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
+  <div class="glass p-4">
+    <div class="text-[11px] uppercase tracking-widest text-white/45 mb-1">Pending</div>
+    <div class="text-2xl font-bold tracking-tight {% if counters.pending_approvals > 0 %}text-amber-300{% else %}text-white/60{% endif %}">{{ counters.pending_approvals }}</div>
+  </div>
+  <div class="glass p-4">
+    <div class="text-[11px] uppercase tracking-widest text-white/45 mb-1">Decisions today</div>
+    <div class="text-2xl font-bold tracking-tight">{{ counters.decisions_today }}</div>
+  </div>
+  <div class="glass p-4">
+    <div class="text-[11px] uppercase tracking-widest text-white/45 mb-1">PRs today</div>
+    <div class="text-2xl font-bold tracking-tight">{{ counters.prs_today }}</div>
+  </div>
+  <div class="glass p-4">
+    <div class="text-[11px] uppercase tracking-widest text-white/45 mb-1">Alerts (firing)</div>
+    <div class="text-2xl font-bold tracking-tight {% if (counters.alerts_firing or 0) > 0 %}text-rose-300{% else %}text-white/60{% endif %}">{{ counters.alerts_firing or 0 }}</div>
+  </div>
+</div>
+
+<!-- ── Recent runs ─────────────────────────────────────────────── -->
+<div class="flex items-center justify-between mb-3">
+  <h2 class="text-sm font-semibold uppercase tracking-widest text-white/55">Recent pipeline runs</h2>
   <button
     hx-post="/api/v1/runs"
     hx-vals='{"dry_run": true}'
     hx-headers='{"Content-Type": "application/json"}'
     hx-swap="none"
-    hx-on::after-request="setTimeout(()=>window.location.reload(),500)"
+    hx-on::after-request="setTimeout(()=>window.location.reload(),700)"
     class="btn-glass btn-glass-sm">
     <svg viewBox="0 0 24 24" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5">
       <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h5M20 20v-5h-5M4 20l16-16" />
@@ -88,28 +148,15 @@
     Trigger run
   </button>
 </div>
-
 <div class="glass overflow-hidden">
   <table class="glass-table">
-    <thead>
-      <tr>
-        <th>Run</th>
-        <th>Status</th>
-        <th class="text-right">Workloads</th>
-        <th>Started</th>
-        <th>Ended</th>
-      </tr>
-    </thead>
+    <thead><tr><th>Run</th><th>Status</th><th class="text-right">Workloads</th><th>Started</th><th>Ended</th></tr></thead>
     <tbody>
       {% for r in recent_runs %}
       <tr>
         <td class="mono text-xs text-white/70">{{ r.id[:8] }}…</td>
         <td>
-          <span class="pill
-            {% if r.status == 'succeeded' %}pill-success
-            {% elif r.status == 'partial' %}pill-warn
-            {% elif r.status == 'failed' %}pill-danger
-            {% else %}pill-info{% endif %}">
+          <span class="pill {% if r.status == 'succeeded' %}pill-success{% elif r.status == 'partial' %}pill-warn{% elif r.status == 'failed' %}pill-danger{% else %}pill-info{% endif %}">
             <span class="w-1.5 h-1.5 rounded-full bg-current opacity-70"></span>
             {{ r.status }}
           </span>
