@@ -6,8 +6,8 @@ import hashlib
 
 from fastapi.testclient import TestClient
 
-from pcap.api.app import create_app
-from pcap.config.settings import APISettings, Settings
+from kairos.api.app import create_app
+from kairos.config.settings import APISettings, Settings
 
 
 def test_healthz(client: TestClient) -> None:
@@ -26,8 +26,8 @@ def test_metrics_exposes_prom_format(client: TestClient) -> None:
     r = client.get("/metrics")
     assert r.status_code == 200
     body = r.text
-    assert "pcap_pipeline_runs_total" in body
-    assert "pcap_decisions_total" in body
+    assert "kairos_pipeline_runs_total" in body
+    assert "kairos_decisions_total" in body
 
 
 def test_correlation_id_roundtrip(client: TestClient) -> None:

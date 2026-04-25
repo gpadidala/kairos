@@ -1,6 +1,6 @@
-# pcap — Predictive Capacity & Autoscaling Platform
+# kairos — Predictive Capacity & Autoscaling Platform
 
-Forecast 48 hours of CPU/memory demand for AKS workloads, surface the predicted scaling actions in a human-in-the-loop **approval UI**, and — once approved — open a GitOps PR. Every change flows through a PR that your reviewers see before Argo CD / Flux applies it. PCAP **augments** KEDA and HPA; it never writes to the cluster.
+Forecast 48 hours of CPU/memory demand for AKS workloads, surface the predicted scaling actions in a human-in-the-loop **approval UI**, and — once approved — open a GitOps PR. Every change flows through a PR that your reviewers see before Argo CD / Flux applies it. KAIROS **augments** KEDA and HPA; it never writes to the cluster.
 
 [![CI](https://img.shields.io/badge/ci-passing-brightgreen)](./.github/workflows/ci.yml)
 [![Tests](https://img.shields.io/badge/tests-159%20passing-brightgreen)](./tests)
@@ -13,11 +13,11 @@ Repo split:
 
 | Path | What it's for |
 |---|---|
-| [`deploy/docker-compose/`](deploy/docker-compose/) | **Run the whole stack with Docker Compose** — PCAP + Redis + Mimir + Grafana. Works behind a corporate proxy / air-gapped. |
+| [`deploy/docker-compose/`](deploy/docker-compose/) | **Run the whole stack with Docker Compose** — KAIROS + Redis + Mimir + Grafana. Works behind a corporate proxy / air-gapped. |
 | [`deploy/helm/`](deploy/helm/) · [`deploy/kustomize/`](deploy/kustomize/) | Kubernetes production deploy — Helm chart (RBAC, NetworkPolicy, PDB, HPA, ServiceMonitor) and Kustomize overlays |
-| [`src/pcap/`](src/pcap/) | Python 3.12 application code — FastAPI + HTMX UI + SQLAlchemy + APScheduler |
+| [`src/kairos/`](src/kairos/) | Python 3.12 application code — FastAPI + HTMX UI + SQLAlchemy + APScheduler |
 | [`examples/demo/`](examples/demo/) | Alternate synthetic-metric demo layout |
-| [`examples/manifests/`](examples/manifests/) · [`examples/keda/`](examples/keda/) | Sample workload manifests PCAP knows how to scale |
+| [`examples/manifests/`](examples/manifests/) · [`examples/keda/`](examples/keda/) | Sample workload manifests KAIROS knows how to scale |
 | [`docs/`](docs/) | Installation guide, full env-var reference, on-call runbooks, ADRs |
 | [`tests/`](tests/) | 159 tests — unit, integration, E2E. `mypy --strict` across 80 source files. |
 
@@ -42,7 +42,7 @@ cd deploy/docker-compose
 ./scripts/setup.sh              # bootstraps .env, brings stack up
 # OR, explicit:
 cp .env.example .env
-docker compose --env-file .env -f compose/docker-compose.yml -p pcap up -d --build
+docker compose --env-file .env -f compose/docker-compose.yml -p kairos up -d --build
 ```
 
 #### Windows (PowerShell)
@@ -52,7 +52,7 @@ cd deploy\docker-compose
 .\scripts\setup.ps1
 # OR, explicit:
 Copy-Item .env.example .env
-docker compose --env-file .env -f compose/docker-compose.yml -p pcap up -d --build
+docker compose --env-file .env -f compose/docker-compose.yml -p kairos up -d --build
 ```
 
 #### Legacy `docker-compose` v1 (hyphenated, still works)
@@ -60,7 +60,7 @@ docker compose --env-file .env -f compose/docker-compose.yml -p pcap up -d --bui
 ```bash
 cd deploy/docker-compose
 cp .env.example .env
-docker-compose --env-file .env -f compose/docker-compose.yml -p pcap up -d --build
+docker-compose --env-file .env -f compose/docker-compose.yml -p kairos up -d --build
 ```
 
 ### Verify
@@ -71,18 +71,18 @@ make verify
 ```
 
 ```
-PCAP:    {"status":"ok","version":"0.1.0"}
+KAIROS:    {"status":"ok","version":"0.1.0"}
 Grafana: {"database":"ok","version":"11.4.0"}
 Mimir:   ready
 ```
 
-Open **http://localhost:8090/ui** — lands on the PCAP overview dashboard.
+Open **http://localhost:8090/ui** — lands on the KAIROS overview dashboard.
 
 | URL | What you see |
 |---|---|
-| http://localhost:8090/ui | PCAP UI — pending approvals, history, KEDA activity, alerts |
+| http://localhost:8090/ui | KAIROS UI — pending approvals, history, KEDA activity, alerts |
 | http://localhost:8090/docs | Swagger UI for the JSON API |
-| http://localhost:3000 | Grafana (admin/admin) — PCAP folder with two dashboards pre-provisioned |
+| http://localhost:3000 | Grafana (admin/admin) — KAIROS folder with two dashboards pre-provisioned |
 | http://localhost:9009 | Mimir admin |
 
 ### Common commands (run from `deploy/docker-compose/`)
@@ -91,8 +91,8 @@ Open **http://localhost:8090/ui** — lands on the PCAP overview dashboard.
 |---|---|
 | Stop, keep volumes | `make down` |
 | Nuke + reset volumes | `make nuke` |
-| Tail PCAP logs | `docker compose -f compose/docker-compose.yml -p pcap logs -f pcap` |
-| Rebuild after code change | `docker compose --env-file .env -f compose/docker-compose.yml -p pcap up -d --force-recreate --build pcap` |
+| Tail KAIROS logs | `docker compose -f compose/docker-compose.yml -p kairos logs -f kairos` |
+| Rebuild after code change | `docker compose --env-file .env -f compose/docker-compose.yml -p kairos up -d --force-recreate --build kairos` |
 | Trigger a prediction cycle | `curl -X POST http://localhost:8090/api/v1/runs -d '{"dry_run": true}'` |
 | Enable synthetic metrics demo | `make demo-up` |
 | Pre-pull all images (air-gapped) | `make pull` |
@@ -104,7 +104,7 @@ Full corporate-env notes (proxy, image mirror, air-gapped install, secrets handl
 
 ---
 
-## 2. What PCAP does
+## 2. What KAIROS does
 
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
@@ -122,7 +122,7 @@ Full corporate-env notes (proxy, image mirror, air-gapped install, secrets handl
                            └─────────┬────────┘
                                      │ PromQL
                            ┌─────────▼────────┐
-                           │       PCAP       │
+                           │       KAIROS       │
                            │                  │
                            │  discover  →     │
                            │  collect   →     │
@@ -169,10 +169,10 @@ Per-decision approval ID is content-addressed by decision hash, so duplicate det
 When you're ready to run inside the cluster rather than as a standalone Compose stack:
 
 ```bash
-kubectl create namespace pcap
-helm install pcap deploy/helm/pcap \
-  --namespace pcap \
-  --values deploy/helm/pcap/values-prod.yaml \
+kubectl create namespace kairos
+helm install kairos deploy/helm/kairos \
+  --namespace kairos \
+  --values deploy/helm/kairos/values-prod.yaml \
   --set config.github.repo=your-org/your-gitops-repo
 ```
 
@@ -189,25 +189,25 @@ Full installation guide: [`docs/installation.md`](./docs/installation.md). The H
 
 ## 5. Configuration reference
 
-Every setting is env-driven, prefix `PCAP_`, nested via `__` (double underscore).
+Every setting is env-driven, prefix `KAIROS_`, nested via `__` (double underscore).
 
 Common knobs (full reference in [`docs/configuration.md`](./docs/configuration.md)):
 
 | Env | Default | What it does |
 |---|---|---|
-| `PCAP_FEATURES__DRY_RUN` | `true` | Logs decisions, skips side effects |
-| `PCAP_FEATURES__REQUIRE_UI_APPROVAL` | `true` | Queue for UI approval instead of immediate PR |
-| `PCAP_FEATURES__ENABLE_PR_CREATION` | `false` | Real GitHub PRs (needs `PCAP_GITHUB__TOKEN`) |
-| `PCAP_FEATURES__ENABLE_LLM` | `true` | LLM-generated rationales in PR body |
-| `PCAP_FEATURES__ENABLE_NOTIFICATIONS` | `true` | Teams + Slack + Email dispatch |
-| `PCAP_SCHEDULER__INTERVAL_MINUTES` | `30` | How often Pipeline.run_once fires |
-| `PCAP_FORECASTING__HORIZON_HOURS` | `48` | How far ahead to predict |
-| `PCAP_DECISION__CPU_HEADROOM_THRESHOLD` | `0.80` | R-001 CPU breach gate |
-| `PCAP_DECISION__MEM_HEADROOM_THRESHOLD` | `0.80` | R-002 memory breach gate |
-| `PCAP_DECISION__LOW_UTILIZATION_THRESHOLD` | `0.30` | R-008 scale-down gate |
-| `PCAP_LLM__PRIMARY` | `anthropic` | LLM router primary (`openai`, `azure_openai`, `ollama` supported) |
+| `KAIROS_FEATURES__DRY_RUN` | `true` | Logs decisions, skips side effects |
+| `KAIROS_FEATURES__REQUIRE_UI_APPROVAL` | `true` | Queue for UI approval instead of immediate PR |
+| `KAIROS_FEATURES__ENABLE_PR_CREATION` | `false` | Real GitHub PRs (needs `KAIROS_GITHUB__TOKEN`) |
+| `KAIROS_FEATURES__ENABLE_LLM` | `true` | LLM-generated rationales in PR body |
+| `KAIROS_FEATURES__ENABLE_NOTIFICATIONS` | `true` | Teams + Slack + Email dispatch |
+| `KAIROS_SCHEDULER__INTERVAL_MINUTES` | `30` | How often Pipeline.run_once fires |
+| `KAIROS_FORECASTING__HORIZON_HOURS` | `48` | How far ahead to predict |
+| `KAIROS_DECISION__CPU_HEADROOM_THRESHOLD` | `0.80` | R-001 CPU breach gate |
+| `KAIROS_DECISION__MEM_HEADROOM_THRESHOLD` | `0.80` | R-002 memory breach gate |
+| `KAIROS_DECISION__LOW_UTILIZATION_THRESHOLD` | `0.30` | R-008 scale-down gate |
+| `KAIROS_LLM__PRIMARY` | `anthropic` | LLM router primary (`openai`, `azure_openai`, `ollama` supported) |
 
-The Docker Compose stack maps a friendlier `PCAP_FEATURES_*` form (single underscore) onto these via `.env`; see `deploy/docker-compose/.env.example`.
+The Docker Compose stack maps a friendlier `KAIROS_FEATURES_*` form (single underscore) onto these via `.env`; see `deploy/docker-compose/.env.example`.
 
 ---
 
@@ -226,7 +226,7 @@ Evaluated in priority order. First match wins (with R-007 acting as a gate).
 | R-006 | All forecasts within ±15% of current | `NOOP` |
 | — | Otherwise | `NOOP` |
 
-Thresholds are env-configurable. Rules are pure functions in [`src/pcap/decision/rules.py`](./src/pcap/decision/rules.py) — every rule has unit + property-based tests in [`tests/unit/test_decision_engine.py`](./tests/unit/test_decision_engine.py).
+Thresholds are env-configurable. Rules are pure functions in [`src/kairos/decision/rules.py`](./src/kairos/decision/rules.py) — every rule has unit + property-based tests in [`tests/unit/test_decision_engine.py`](./tests/unit/test_decision_engine.py).
 
 ---
 
@@ -264,7 +264,7 @@ make api                        # run the FastAPI app locally on :8080
 
 ## 8. Security posture
 
-- **No cluster writes.** PCAP's ServiceAccount has `get/list/watch` only on Deployments, StatefulSets, DaemonSets, ConfigMaps, and KEDA ScaledObjects. **No write verbs on anything.** (ADR-0004)
+- **No cluster writes.** KAIROS's ServiceAccount has `get/list/watch` only on Deployments, StatefulSets, DaemonSets, ConfigMaps, and KEDA ScaledObjects. **No write verbs on anything.** (ADR-0004)
 - **No direct edits to `main`.** Every change is a pull request against a configured branch.
 - **No duplicate PRs.** Redis `SET NX EX` on a content-addressed `decision_hash` guarantees one open PR per logical decision within the TTL window. (ADR-0005)
 - **Read-only rootfs** in the container. Non-root UID 10001. All Linux capabilities dropped.
@@ -277,25 +277,25 @@ make api                        # run the FastAPI app locally on :8080
 
 ## 9. Observability
 
-PCAP exposes Prometheus metrics at `/metrics`. Key series:
+KAIROS exposes Prometheus metrics at `/metrics`. Key series:
 
 ```
-pcap_pipeline_runs_total{status}                — counter
-pcap_pipeline_duration_seconds{phase}           — histogram
-pcap_forecasts_generated_total{model,kind}      — counter
-pcap_decisions_total{action,severity}           — counter
-pcap_prs_created_total{result}                  — counter
-pcap_notifications_sent_total{channel,result}   — counter
-pcap_llm_calls_total{provider,result}           — counter
-pcap_llm_tokens_total{provider,kind}            — counter
-pcap_external_call_duration_seconds{service}    — histogram
-pcap_circuit_breaker_state{service}             — gauge (0=closed, 1=half, 2=open)
-pcap_dedup_hits_total{kind}                     — counter
+kairos_pipeline_runs_total{status}                — counter
+kairos_pipeline_duration_seconds{phase}           — histogram
+kairos_forecasts_generated_total{model,kind}      — counter
+kairos_decisions_total{action,severity}           — counter
+kairos_prs_created_total{result}                  — counter
+kairos_notifications_sent_total{channel,result}   — counter
+kairos_llm_calls_total{provider,result}           — counter
+kairos_llm_tokens_total{provider,kind}            — counter
+kairos_external_call_duration_seconds{service}    — histogram
+kairos_circuit_breaker_state{service}             — gauge (0=closed, 1=half, 2=open)
+kairos_dedup_hits_total{kind}                     — counter
 ```
 
-A platform dashboard ships at [`deploy/grafana/dashboards/pcap-platform.json`](./deploy/grafana/dashboards/pcap-platform.json) and is auto-provisioned by the Compose stack.
+A platform dashboard ships at [`deploy/grafana/dashboards/kairos-platform.json`](./deploy/grafana/dashboards/kairos-platform.json) and is auto-provisioned by the Compose stack.
 
-OpenTelemetry spans wrap every pipeline phase + every external call. Enable with `PCAP_TRACING__ENABLED=true` and an OTLP endpoint.
+OpenTelemetry spans wrap every pipeline phase + every external call. Enable with `KAIROS_TRACING__ENABLED=true` and an OTLP endpoint.
 
 ---
 
@@ -306,7 +306,7 @@ Under [`docs/runbooks/`](./docs/runbooks/):
 | Runbook | When to read |
 |---|---|
 | [`on-call.md`](./docs/runbooks/on-call.md) | First 5 minutes — first thing oncall looks at |
-| [`pcap-down.md`](./docs/runbooks/pcap-down.md) | PCAP itself failing or readiness-failing |
+| [`kairos-down.md`](./docs/runbooks/kairos-down.md) | KAIROS itself failing or readiness-failing |
 | [`llm-degraded.md`](./docs/runbooks/llm-degraded.md) | LLM providers erroring / rate-limited |
 | [`github-rate-limit.md`](./docs/runbooks/github-rate-limit.md) | GitHub API breaker open / 429s |
 

@@ -1,6 +1,6 @@
-# PCAP PromQL Query Catalogue
+# KAIROS PromQL Query Catalogue
 
-Every query PCAP issues against Mimir is defined **only** in [`src/pcap/collectors/promql_library.py`](../../src/pcap/collectors/promql_library.py). Copy-pasting query strings anywhere else is a bug.
+Every query KAIROS issues against Mimir is defined **only** in [`src/kairos/collectors/promql_library.py`](../../src/kairos/collectors/promql_library.py). Copy-pasting query strings anywhere else is a bug.
 
 All queries accept these placeholders unless noted:
 
@@ -125,7 +125,7 @@ ThreadPool size. Correlates with ingress concurrency and blocking calls.
 ```promql
 max(keda_scaler_metrics_value{namespace="$namespace",scaledobject="$scaledobject"})
 ```
-Current metric value KEDA sees. A sustained upward trend triggers PCAP's `KEDA_PRESCALE` recommendation.
+Current metric value KEDA sees. A sustained upward trend triggers KAIROS's `KEDA_PRESCALE` recommendation.
 
 ### `keda_scaler_active`
 ```promql

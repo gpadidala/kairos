@@ -1,0 +1,64 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "kairos.fullname" . }}-config
+  labels:
+    {{- include "kairos.labels" . | nindent 4 }}
+data:
+  KAIROS_ENVIRONMENT: {{ .Values.config.environment | quote }}
+
+  KAIROS_MIMIR__URL: {{ .Values.config.mimir.url | quote }}
+  KAIROS_MIMIR__ORG_ID: {{ .Values.config.mimir.orgId | quote }}
+  KAIROS_MIMIR__TIMEOUT_SECONDS: {{ .Values.config.mimir.timeoutSeconds | quote }}
+  KAIROS_MIMIR__MAX_CONCURRENT: {{ .Values.config.mimir.maxConcurrent | quote }}
+
+  KAIROS_GRAFANA__URL: {{ .Values.config.grafana.url | quote }}
+  KAIROS_GRAFANA__FOLDER: {{ .Values.config.grafana.folder | quote }}
+  KAIROS_GRAFANA__DATASOURCE_MIMIR: {{ .Values.config.grafana.datasourceMimir | quote }}
+  KAIROS_GRAFANA__PROVISION_DASHBOARDS: {{ .Values.config.grafana.provisionDashboards | quote }}
+  KAIROS_GRAFANA__PROVISION_ALERTS: {{ .Values.config.grafana.provisionAlerts | quote }}
+
+  KAIROS_GITHUB__REPO: {{ .Values.config.github.repo | quote }}
+  KAIROS_GITHUB__BASE_BRANCH: {{ .Values.config.github.baseBranch | quote }}
+  KAIROS_GITHUB__BRANCH_PREFIX: {{ .Values.config.github.branchPrefix | quote }}
+
+  KAIROS_LLM__PRIMARY: {{ .Values.config.llm.primary | quote }}
+
+  KAIROS_REDIS__URL: {{ .Values.config.redis.url | quote }}
+
+  KAIROS_POSTGRES__ENABLED: {{ .Values.config.postgres.enabled | quote }}
+
+  KAIROS_K8S__MODE: {{ .Values.config.k8s.mode | quote }}
+
+  KAIROS_SCHEDULER__ENABLED: {{ .Values.config.scheduler.enabled | quote }}
+  KAIROS_SCHEDULER__INTERVAL_MINUTES: {{ .Values.config.scheduler.intervalMinutes | quote }}
+  KAIROS_SCHEDULER__JITTER_SECONDS: {{ .Values.config.scheduler.jitterSeconds | quote }}
+  KAIROS_SCHEDULER__MAX_CONCURRENT_WORKLOADS: {{ .Values.config.scheduler.maxConcurrentWorkloads | quote }}
+
+  KAIROS_FORECASTING__HORIZON_HOURS: {{ .Values.config.forecasting.horizonHours | quote }}
+  KAIROS_FORECASTING__LOOKBACK_DAYS: {{ .Values.config.forecasting.lookbackDays | quote }}
+  KAIROS_FORECASTING__RESOLUTION_SECONDS: {{ .Values.config.forecasting.resolutionSeconds | quote }}
+  KAIROS_FORECASTING__MIN_CONFIDENCE: {{ .Values.config.forecasting.minConfidence | quote }}
+
+  KAIROS_DECISION__CPU_HEADROOM_THRESHOLD: {{ .Values.config.decision.cpuHeadroomThreshold | quote }}
+  KAIROS_DECISION__MEM_HEADROOM_THRESHOLD: {{ .Values.config.decision.memHeadroomThreshold | quote }}
+  KAIROS_DECISION__LOW_UTILIZATION_THRESHOLD: {{ .Values.config.decision.lowUtilizationThreshold | quote }}
+  KAIROS_DECISION__MAX_STEP_REPLICAS: {{ .Values.config.decision.maxStepReplicas | quote }}
+  KAIROS_DECISION__MIN_REPLICAS_FLOOR: {{ .Values.config.decision.minReplicasFloor | quote }}
+
+  KAIROS_FEATURES__ENABLE_LLM: {{ .Values.config.features.enableLlm | quote }}
+  KAIROS_FEATURES__ENABLE_PR_CREATION: {{ .Values.config.features.enablePrCreation | quote }}
+  KAIROS_FEATURES__ENABLE_NOTIFICATIONS: {{ .Values.config.features.enableNotifications | quote }}
+  KAIROS_FEATURES__ENABLE_GRAFANA_PROVISIONING: {{ .Values.config.features.enableGrafanaProvisioning | quote }}
+  KAIROS_FEATURES__DRY_RUN: {{ .Values.config.features.dryRun | quote }}
+  KAIROS_FEATURES__ALLOW_STATEFULSET_AUTO_PR: {{ .Values.config.features.allowStatefulsetAutoPr | quote }}
+
+  KAIROS_API__HOST: {{ .Values.config.api.host | quote }}
+  KAIROS_API__PORT: {{ .Values.config.api.port | quote }}
+
+  KAIROS_TRACING__ENABLED: {{ .Values.config.tracing.enabled | quote }}
+  KAIROS_TRACING__OTLP_ENDPOINT: {{ .Values.config.tracing.otlpEndpoint | quote }}
+  KAIROS_TRACING__SAMPLE_RATIO: {{ .Values.config.tracing.sampleRatio | quote }}
+
+  KAIROS_LOGGING__LEVEL: {{ .Values.config.logging.level | quote }}
+  KAIROS_LOGGING__JSON_FORMAT: "true"

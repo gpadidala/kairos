@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from pcap.collectors.promql_library import PromQLLibrary, QueryName
-from pcap.domain.enums import Runtime
+from kairos.collectors.promql_library import PromQLLibrary, QueryName
+from kairos.domain.enums import Runtime
 
 
 def test_render_cpu_usage() -> None:

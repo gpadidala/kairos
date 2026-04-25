@@ -8,9 +8,9 @@ import pytest
 from fastapi.testclient import TestClient
 from pydantic import HttpUrl
 
-from pcap.api.app import create_app
-from pcap.config.settings import AuditDBSettings, Settings
-from pcap.domain.enums import (
+from kairos.api.app import create_app
+from kairos.config.settings import AuditDBSettings, Settings
+from kairos.domain.enums import (
     ApprovalStatus,
     ForecastModel,
     Runtime,
@@ -18,15 +18,15 @@ from pcap.domain.enums import (
     Severity,
     WorkloadKind,
 )
-from pcap.domain.models import (
+from kairos.domain.models import (
     Forecast,
     MetricPoint,
     PRResult,
     ScalingDecision,
     Workload,
 )
-from pcap.storage.approvals import ApprovalStore, make_approval_id
-from pcap.storage.db import Database
+from kairos.storage.approvals import ApprovalStore, make_approval_id
+from kairos.storage.db import Database
 
 
 @pytest.fixture
@@ -131,7 +131,7 @@ async def test_approve_unknown_returns_none(store: ApprovalStore) -> None:
 async def test_expire_stale(store: ApprovalStore, db: Database) -> None:
     # Insert a row with a backdated created_at
     approval = await store.enqueue(_decision())
-    from pcap.storage.db import ApprovalRow  # noqa: PLC0415
+    from kairos.storage.db import ApprovalRow  # noqa: PLC0415
 
     async with db.session() as s:
         row = await s.get(ApprovalRow, approval.id)
@@ -167,10 +167,10 @@ def test_make_approval_id_is_stable() -> None:
 def ui_ctx(tmp_path, monkeypatch):  # type: ignore[no-untyped-def]
     """Yield (TestClient, shared sqlite url) so tests can seed the DB themselves."""
     url = f"sqlite+aiosqlite:///{tmp_path}/ui.db"
-    monkeypatch.setenv("PCAP_AUDIT_DB__URL", url)
-    monkeypatch.setenv("PCAP_FEATURES__DRY_RUN", "false")
-    monkeypatch.setenv("PCAP_FEATURES__REQUIRE_UI_APPROVAL", "true")
-    monkeypatch.setenv("PCAP_FEATURES__ENABLE_UI", "true")
+    monkeypatch.setenv("KAIROS_AUDIT_DB__URL", url)
+    monkeypatch.setenv("KAIROS_FEATURES__DRY_RUN", "false")
+    monkeypatch.setenv("KAIROS_FEATURES__REQUIRE_UI_APPROVAL", "true")
+    monkeypatch.setenv("KAIROS_FEATURES__ENABLE_UI", "true")
     settings = Settings()
     with TestClient(create_app(settings)) as c:
         yield c, url
@@ -263,7 +263,7 @@ def test_htmx_approve_full_cycle(ui_ctx) -> None:  # type: ignore[no-untyped-def
             return PRResult(
                 url=HttpUrl("https://github.com/acme/gitops/pull/99"),
                 number=99,
-                branch="pcap/test",
+                branch="kairos/test",
                 files_changed=["apps/api/deployment.yaml"],
             )
 

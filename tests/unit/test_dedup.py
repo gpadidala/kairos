@@ -7,11 +7,11 @@ from datetime import UTC, datetime
 import fakeredis.aioredis
 import pytest
 
-from pcap.config.settings import RedisSettings
-from pcap.domain.enums import NotificationChannel, ScalingAction, Severity
-from pcap.domain.models import ScalingDecision, Workload
-from pcap.storage.dedup import DedupKind, DedupStore, dedup_key
-from pcap.storage.redis_client import RedisClient
+from kairos.config.settings import RedisSettings
+from kairos.domain.enums import NotificationChannel, ScalingAction, Severity
+from kairos.domain.models import ScalingDecision, Workload
+from kairos.storage.dedup import DedupKind, DedupStore, dedup_key
+from kairos.storage.redis_client import RedisClient
 
 
 @pytest.fixture

@@ -37,7 +37,7 @@ jobs:
           uv run ruff format --check src tests
 
       - name: Type check (mypy --strict)
-        run: uv run mypy src/pcap
+        run: uv run mypy src/kairos
 
       - name: Unit + integration tests
         run: uv run pytest -q
@@ -68,7 +68,7 @@ jobs:
 
       - name: bandit
         run: |
-          uv tool run --from bandit bandit -r src/pcap -x tests -ll
+          uv tool run --from bandit bandit -r src/kairos -x tests -ll
 
       - name: pip-audit
         run: |
@@ -85,12 +85,12 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Build image
-        run: docker build -t pcap:ci .
+        run: docker build -t kairos:ci .
 
       - name: Scan image (trivy)
         uses: aquasecurity/trivy-action@0.24.0
         with:
-          image-ref: pcap:ci
+          image-ref: kairos:ci
           severity: HIGH,CRITICAL
           exit-code: '0'
           ignore-unfixed: true
@@ -103,9 +103,9 @@ jobs:
       - uses: azure/setup-helm@v4
         with: { version: v3.16.0 }
       - name: helm lint
-        run: helm lint deploy/helm/pcap || true
+        run: helm lint deploy/helm/kairos || true
       - name: helm template
-        run: helm template pcap deploy/helm/pcap > /tmp/rendered.yaml || true
+        run: helm template kairos deploy/helm/kairos > /tmp/rendered.yaml || true
       - name: kubeconform
         run: |
           curl -sSL -o /tmp/kc.tgz https://github.com/yannh/kubeconform/releases/download/v0.6.7/kubeconform-linux-amd64.tar.gz

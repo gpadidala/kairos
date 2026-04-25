@@ -1,0 +1,37 @@
+# Production overrides on top of values.yaml.
+replicaCount: 3
+
+image:
+  pullPolicy: IfNotPresent
+
+config:
+  features:
+    dryRun: false
+    enablePrCreation: true
+  scheduler:
+    intervalMinutes: 30
+  logging:
+    level: INFO
+
+resources:
+  requests:
+    cpu: 500m
+    memory: 1Gi
+  limits:
+    cpu: 4
+    memory: 4Gi
+
+existingSecrets:
+  github: kairos-github
+  llm: kairos-llm
+  grafana: kairos-grafana
+  redis: kairos-redis
+  teams: kairos-teams
+  slack: kairos-slack
+  smtp: kairos-smtp
+  apiTokens: kairos-api
+
+hpa:
+  minReplicas: 3
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 65

@@ -1,0 +1,162 @@
+{% extends "base.html.j2" %}
+{% set active = "pending" %}
+{% block title %}Pending Approvals{% endblock %}
+{% block content %}
+<div class="flex items-end justify-between mb-8">
+  <div>
+    <h1 class="text-3xl font-bold tracking-tight mb-1">Pending Approvals</h1>
+    <p class="text-sm text-white/55">{{ items | length }} decision(s) awaiting human approval. Approving opens a GitOps PR.</p>
+  </div>
+  <button
+    hx-get="/ui/pending"
+    hx-target="body"
+    hx-select="main"
+    hx-swap="outerHTML"
+    class="btn-glass btn-glass-sm">
+    <svg viewBox="0 0 24 24" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h5M20 20v-5h-5M4 20l16-16" />
+    </svg>
+    Refresh
+  </button>
+</div>
+
+{% if not items %}
+  <div class="glass p-16 text-center">
+    <div class="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-emerald-400/30 to-blue-400/30 grid place-items-center ring-1 ring-white/10">
+      <svg viewBox="0 0 24 24" class="w-8 h-8 text-emerald-300" fill="none" stroke="currentColor" stroke-width="2">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+      </svg>
+    </div>
+    <p class="text-lg text-white/85 font-medium">All caught up</p>
+    <p class="text-sm text-white/45 mt-1">No pending approvals. KAIROS will queue new ones after the next pipeline run.</p>
+    <p class="text-xs text-white/30 mt-2 mono">POST /api/v1/runs</p>
+  </div>
+{% endif %}
+
+<div class="space-y-5">
+{% for a in items %}
+  <div id="approval-{{ a.id }}" class="glass-strong p-6">
+    <div class="flex items-start justify-between gap-6">
+      <div class="flex-1 min-w-0">
+        <div class="flex items-center flex-wrap gap-2 mb-2">
+          <span class="pill
+            {% if a.decision.severity.value == 'critical' %}pill-danger
+            {% elif a.decision.severity.value == 'warning' %}pill-warn
+            {% else %}pill-info{% endif %}">
+            <span class="w-1.5 h-1.5 rounded-full bg-current"></span>
+            {{ a.decision.severity.value }}
+          </span>
+          <span class="pill pill-mono">{{ a.decision.action.value }}</span>
+          <span class="pill pill-mono">{{ a.decision.reason_code }}</span>
+        </div>
+        <h2 class="text-xl font-semibold mono tracking-tight">{{ a.decision.workload.uid }}</h2>
+        <p class="text-sm text-white/70 mt-2 leading-relaxed">{{ a.decision.rationale }}</p>
+      </div>
+      <div class="text-right text-xs text-white/45 shrink-0">
+        <div class="mono">{{ a.created_at.strftime('%Y-%m-%d %H:%M UTC') }}</div>
+        <div class="mt-1">
+          confidence
+          <span class="ml-1 text-white/85 font-semibold">{{ "%.2f" | format(a.decision.confidence) }}</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mt-5">
+      {% if a.decision.target_replicas is not none %}
+      <div class="glass p-4">
+        <div class="text-[10px] text-white/45 uppercase tracking-widest">Replicas</div>
+        <div class="mt-1 text-sm flex items-baseline gap-2">
+          <span class="mono text-white/55 line-through decoration-white/30">{{ a.decision.workload.current_replicas }}</span>
+          <span class="text-white/30">→</span>
+          <span class="mono font-bold text-emerald-300 text-lg">{{ a.decision.target_replicas }}</span>
+        </div>
+      </div>
+      {% endif %}
+      {% if a.decision.target_cpu_request %}
+      <div class="glass p-4">
+        <div class="text-[10px] text-white/45 uppercase tracking-widest">CPU request</div>
+        <div class="mt-1 text-sm flex items-baseline gap-2">
+          <span class="mono text-white/55 line-through decoration-white/30">{{ a.decision.workload.cpu_request }}</span>
+          <span class="text-white/30">→</span>
+          <span class="mono font-bold text-emerald-300 text-lg">{{ a.decision.target_cpu_request }}</span>
+        </div>
+      </div>
+      {% endif %}
+      {% if a.decision.target_mem_request %}
+      <div class="glass p-4">
+        <div class="text-[10px] text-white/45 uppercase tracking-widest">Memory</div>
+        <div class="mt-1 text-sm flex items-baseline gap-2">
+          <span class="mono text-white/55 line-through decoration-white/30">{{ a.decision.workload.mem_request }}</span>
+          <span class="text-white/30">→</span>
+          <span class="mono font-bold text-emerald-300 text-lg">{{ a.decision.target_mem_request }}</span>
+        </div>
+      </div>
+      {% endif %}
+    </div>
+
+    {% if a.decision.forecasts %}
+    <details class="mt-4">
+      <summary class="text-xs text-white/55 inline-flex items-center gap-1 hover:text-white/85">
+        <svg viewBox="0 0 24 24" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
+        </svg>
+        View forecasts ({{ a.decision.forecasts | length }})
+      </summary>
+      <div class="mt-2 text-[11px] mono p-3 rounded-xl glass space-y-1 text-white/75">
+        {% for f in a.decision.forecasts %}
+          <div>metric=<span class="text-blue-300">{{ f.metric }}</span> model={{ f.model_used.value }} p95={{ "%.3f" | format(f.p95_predicted) }} peak={{ "%.3f" | format(f.peak_predicted) }} confidence={{ "%.2f" | format(f.confidence_score) }}</div>
+        {% endfor %}
+      </div>
+    </details>
+    {% endif %}
+
+    {% if a.advice %}
+    <details class="mt-3">
+      <summary class="text-xs text-white/55 inline-flex items-center gap-1 hover:text-white/85">
+        <svg viewBox="0 0 24 24" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
+        </svg>
+        LLM advice ({{ a.advice.provider_used.value }}, {{ a.advice.tokens_used }} tokens)
+      </summary>
+      <div class="mt-3 text-sm text-white/80 space-y-3 border-l-2 border-blue-400/30 pl-4">
+        <p><strong class="text-white/95">Why:</strong> {{ a.advice.why }}</p>
+        <p><strong class="text-white/95">Horizontal vs vertical:</strong> {{ a.advice.horizontal_vs_vertical }}</p>
+        <p><strong class="text-white/95">Risk of inaction:</strong> {{ a.advice.risks_of_inaction }}</p>
+      </div>
+    </details>
+    {% endif %}
+
+    <div class="mt-6 flex items-center justify-end gap-3 flex-wrap">
+      <form
+        hx-post="/ui/approvals/{{ a.id }}/reject"
+        hx-target="#approval-{{ a.id }}"
+        hx-swap="outerHTML swap:200ms"
+        class="flex items-center gap-2">
+        <input type="hidden" name="approved_by" value="ui-user" />
+        <input type="text" name="reason" placeholder="Rejection reason"
+               class="glass-input text-xs w-52" />
+        <button class="btn-glass btn-glass-sm btn-glass-danger">
+          <svg viewBox="0 0 24 24" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+          Reject
+        </button>
+      </form>
+      <form
+        hx-post="/ui/approvals/{{ a.id }}/approve"
+        hx-target="#approval-{{ a.id }}"
+        hx-swap="outerHTML swap:200ms"
+        hx-confirm="Approve this scaling decision? A GitOps PR will be opened.">
+        <input type="hidden" name="approved_by" value="ui-user" />
+        <button class="btn-glass btn-glass-success">
+          <svg viewBox="0 0 24 24" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+          </svg>
+          Approve &amp; open PR
+        </button>
+      </form>
+    </div>
+  </div>
+{% endfor %}
+</div>
+{% endblock %}

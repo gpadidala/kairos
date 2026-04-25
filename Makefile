@@ -1,8 +1,8 @@
 .PHONY: help install lock sync lint format type test test-unit test-integration test-e2e coverage verify run api scheduler once docker-build docker-run clean
 
 PY := uv run python
-PKG := pcap
-IMAGE ?= pcap:dev
+PKG := kairos
+IMAGE ?= kairos:dev
 
 help: ## show this help
 	@awk 'BEGIN {FS = ":.*##"; printf "Targets:\n"} /^[a-zA-Z_-]+:.*?##/ { printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2 }' $(MAKEFILE_LIST)
@@ -58,7 +58,7 @@ docker-build: ## build container image
 	docker build -t $(IMAGE) .
 
 docker-run: ## run container locally
-	docker run --rm -p 8080:8080 -e PCAP_FEATURES__DRY_RUN=true $(IMAGE)
+	docker run --rm -p 8080:8080 -e KAIROS_FEATURES__DRY_RUN=true $(IMAGE)
 
 clean: ## remove caches and build artifacts
 	rm -rf .pytest_cache .mypy_cache .ruff_cache .coverage coverage.xml htmlcov dist build

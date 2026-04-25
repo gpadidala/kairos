@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to PCAP are documented here. Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning is [SemVer](https://semver.org/).
+All notable changes to KAIROS are documented here. Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning is [SemVer](https://semver.org/).
 
 ## [Unreleased] — 2026-04-24
 
@@ -18,17 +18,17 @@ All notable changes to PCAP are documented here. Format based on [Keep a Changel
 - JSON API: `GET /api/v1/approvals`, `GET /api/v1/approvals/{id}`, `POST /api/v1/approvals/{id}/{approve,reject}`
 - `GrafanaClient.list_active_alerts()` + `query_prometheus_instant()` — read-only pulls through Grafana's datasource proxy
 - PromQL library extended: `keda_replicas_added_24h`, `keda_scale_events_24h`, `node_pool_size`, `node_pool_delta_24h`
-- Pipeline pre-PR gating: `PCAP_FEATURES__REQUIRE_UI_APPROVAL=true` makes non-NOOP decisions land in the approval queue instead of opening PRs immediately; UI approval triggers the PR
+- Pipeline pre-PR gating: `KAIROS_FEATURES__REQUIRE_UI_APPROVAL=true` makes non-NOOP decisions land in the approval queue instead of opening PRs immediately; UI approval triggers the PR
 - `/api/v1/runs` actually runs `Pipeline.run_once` assembling deps from `app.state`
 - `DemoPRCreator` — zero-network PR stub used when `enable_pr_creation=false`
 
 ### Added (Phase 10 — Demo Harness)
-- `examples/demo/docker-compose.yaml` — Mimir + Grafana + PCAP + metric feeder
+- `examples/demo/docker-compose.yaml` — Mimir + Grafana + KAIROS + metric feeder
 - `examples/demo/seed/feeder.py` — synthetic AKS metrics (container CPU, memory, KEDA scaler lag, node pools) written via Prometheus remote-write; 24h backfill + continuous tick
-- `examples/demo/grafana/` — pre-provisioned Mimir datasource, PCAP Platform + KEDA Activity dashboards
-- `examples/demo/pcap-config/demo-workloads.yaml` — 4 static workloads (JVM/Python/Go/.NET) triggering all decision rules
+- `examples/demo/grafana/` — pre-provisioned Mimir datasource, KAIROS Platform + KEDA Activity dashboards
+- `examples/demo/kairos-config/demo-workloads.yaml` — 4 static workloads (JVM/Python/Go/.NET) triggering all decision rules
 - `examples/demo/sample-app/` — runnable Python FastAPI service with Kustomize + Helm + standalone manifest flavors, plus a Dockerfile
-- `examples/demo/gitops-repo/` — sample GitOps repo layout with `policies/pcap-invariants.rego` and `.github/workflows/validate.yml`
+- `examples/demo/gitops-repo/` — sample GitOps repo layout with `policies/kairos-invariants.rego` and `.github/workflows/validate.yml`
 - `examples/demo/README.md` — front-door walkthrough (no AKS required)
 
 ### Changed
@@ -92,7 +92,7 @@ Initial MVP covering the full §19 Phased Delivery Plan from the master prompt.
 ### Added (Phase 5 — Grafana Provisioning)
 - `GrafanaClient` — folders, dashboards, unified alert rules
 - `dashboard_builder.build_predictions_dashboard` — parameterized by ns/workload
-- Static `pcap-platform.json` self-observability dashboard
+- Static `kairos-platform.json` self-observability dashboard
 - `AlertProvisioner` — per-workload CPU rule
 
 ### Added (Phase 6 — Notifications)
@@ -108,13 +108,13 @@ Initial MVP covering the full §19 Phased Delivery Plan from the master prompt.
 - `/api/v1/runs` wired to the real pipeline
 
 ### Added (Phase 8 — Deployment & Hardening)
-- Helm chart `deploy/helm/pcap/` — Deployment, Service, ServiceAccount, ConfigMap, RBAC,
+- Helm chart `deploy/helm/kairos/` — Deployment, Service, ServiceAccount, ConfigMap, RBAC,
   ServiceMonitor, PDB, HPA, NetworkPolicy
 - `values-prod.yaml` with production overrides
-- Runbooks: `on-call`, `pcap-down`, `llm-degraded`, `github-rate-limit`
+- Runbooks: `on-call`, `kairos-down`, `llm-degraded`, `github-rate-limit`
 - `docs/installation.md`, `docs/configuration.md`, `examples/promql/queries.md`
 - Example workload manifests (JVM/Python/Go/.NET) + KEDA ScaledObject
-- GitHub Actions: `pcap-ci.yml`, `gitops-validate.yml`, `release.yml` (SBOM + cosign)
+- GitHub Actions: `kairos-ci.yml`, `gitops-validate.yml`, `release.yml` (SBOM + cosign)
 - Kustomize base + dev/prod overlays
 
 ### Metrics at release
@@ -123,16 +123,16 @@ Initial MVP covering the full §19 Phased Delivery Plan from the master prompt.
 - `mypy --strict` clean across 74 source files
 - `ruff check` + `ruff format --check` clean
 
-[0.1.0]: https://github.com/your-org/pcap/releases/tag/v0.1.0
+[0.1.0]: https://github.com/your-org/kairos/releases/tag/v0.1.0
 
 ### Added (Phase 11 — Corporate Docker Compose stack)
 - `deploy/docker-compose/` — production-shaped standalone stack following the
   grafana12-oss lab pattern:
-  - `compose/docker-compose.yml` — PCAP + Redis + Mimir + Grafana with health
+  - `compose/docker-compose.yml` — KAIROS + Redis + Mimir + Grafana with health
     checks, resource limits, restart policies, bundled pre-provisioned Grafana
     dashboards, and an optional `--profile demo` synthetic-metrics feeder.
   - `.env.example` — pinned image tags (`REDIS_TAG`, `MIMIR_TAG`, `GRAFANA_TAG`,
-    `PCAP_IMAGE_TAG`), corporate proxy slots (`HTTP_PROXY`/`HTTPS_PROXY`/`NO_PROXY`),
+    `KAIROS_IMAGE_TAG`), corporate proxy slots (`HTTP_PROXY`/`HTTPS_PROXY`/`NO_PROXY`),
     feature flags, external Mimir/Grafana overrides, per-container resource
     limits.
   - `scripts/setup.sh`, `scripts/setup.ps1` — idempotent bootstrap (.env,
@@ -142,7 +142,7 @@ Initial MVP covering the full §19 Phased Delivery Plan from the master prompt.
   - `scripts/backup.sh` — snapshot the SQLite audit DB + Redis AOF.
   - `Makefile` — `up / demo-up / down / nuke / restart / logs / ps / verify / pull / backup`.
   - `.secrets/` — gitignored per-file secret slot directory mounted read-only
-    at `/run/pcap-secrets` inside the PCAP container.
+    at `/run/kairos-secrets` inside the KAIROS container.
   - Per-directory `README.md` covering corporate-proxy, image-mirror, air-gapped,
     secret-handling, external-Grafana/Mimir pointing, real-GitHub PR enablement.
 - Top-level `README.md` rewritten in the grafana12-oss lab style: repo split

@@ -1,0 +1,172 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "kairos.fullname" . }}
+  labels:
+    {{- include "kairos.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "kairos.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "kairos.selectorLabels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      serviceAccountName: {{ include "kairos.serviceAccountName" . }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: kairos
+          image: {{ include "kairos.image" . | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args: ["api"]
+          ports:
+            - name: http
+              containerPort: {{ .Values.config.api.port }}
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: {{ include "kairos.fullname" . }}-config
+          env:
+            {{- if .Values.existingSecrets.github }}
+            - name: KAIROS_GITHUB__TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.existingSecrets.github }}
+                  key: token
+                  optional: true
+            {{- end }}
+            {{- if .Values.existingSecrets.llm }}
+            - name: KAIROS_LLM__ANTHROPIC__API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.existingSecrets.llm }}
+                  key: anthropic-api-key
+                  optional: true
+            - name: KAIROS_LLM__OPENAI__API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.existingSecrets.llm }}
+                  key: openai-api-key
+                  optional: true
+            - name: KAIROS_LLM__AZURE_OPENAI__API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.existingSecrets.llm }}
+                  key: azure-openai-api-key
+                  optional: true
+            {{- end }}
+            {{- if .Values.existingSecrets.grafana }}
+            - name: KAIROS_GRAFANA__API_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.existingSecrets.grafana }}
+                  key: api-token
+                  optional: true
+            {{- end }}
+            {{- if .Values.existingSecrets.teams }}
+            - name: KAIROS_TEAMS__WEBHOOK_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.existingSecrets.teams }}
+                  key: webhook-url
+                  optional: true
+            {{- end }}
+            {{- if .Values.existingSecrets.slack }}
+            - name: KAIROS_SLACK__WEBHOOK_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.existingSecrets.slack }}
+                  key: webhook-url
+                  optional: true
+            - name: KAIROS_SLACK__BOT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.existingSecrets.slack }}
+                  key: bot-token
+                  optional: true
+            {{- end }}
+            {{- if .Values.existingSecrets.smtp }}
+            - name: KAIROS_SMTP__USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.existingSecrets.smtp }}
+                  key: username
+                  optional: true
+            - name: KAIROS_SMTP__PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.existingSecrets.smtp }}
+                  key: password
+                  optional: true
+            {{- end }}
+            {{- if .Values.existingSecrets.apiTokens }}
+            - name: KAIROS_API__TOKEN_SHA256_LIST
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.existingSecrets.apiTokens }}
+                  key: sha256-list
+                  optional: true
+            {{- end }}
+            {{- with .Values.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            {{- with .Values.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        {{- with .Values.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      terminationGracePeriodSeconds: 60

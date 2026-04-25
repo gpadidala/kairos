@@ -15,7 +15,7 @@ IMAGES=(
   "redis:${REDIS_TAG:-7.4-alpine}"
   "grafana/mimir:${MIMIR_TAG:-2.13.0}"
   "grafana/grafana:${GRAFANA_TAG:-11.4.0}"
-  "${PCAP_IMAGE:-ghcr.io/your-org/pcap}:${PCAP_IMAGE_TAG:-0.1.0}"
+  "${KAIROS_IMAGE:-ghcr.io/your-org/kairos}:${KAIROS_IMAGE_TAG:-0.1.0}"
   "python:3.12-slim"
 )
 

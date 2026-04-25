@@ -7,9 +7,9 @@ from pathlib import Path
 import pytest
 import yaml
 
-from pcap.config.settings import K8sSettings
-from pcap.discovery.workload_discovery import StaticWorkloadSource, WorkloadDiscovery
-from pcap.domain.exceptions import ConfigurationError
+from kairos.config.settings import K8sSettings
+from kairos.discovery.workload_discovery import StaticWorkloadSource, WorkloadDiscovery
+from kairos.domain.exceptions import ConfigurationError
 
 
 @pytest.fixture
@@ -37,7 +37,7 @@ def static_workloads_file(tmp_path: Path) -> Path:
             "mem_request": "512Mi",
             "gitops_path": "apps/worker",
             "labels": {},
-            "annotations": {"pcap.io/exclude": "true"},
+            "annotations": {"kairos.io/exclude": "true"},
         },
     ]
     f = tmp_path / "workloads.yaml"

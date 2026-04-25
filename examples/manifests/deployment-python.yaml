@@ -7,8 +7,8 @@ metadata:
     app.kubernetes.io/name: inference-api
     app.kubernetes.io/runtime: python
   annotations:
-    pcap.io/gitops-path: "apps/inference-api"
-    pcap.io/runtime: "python"
+    kairos.io/gitops-path: "apps/inference-api"
+    kairos.io/runtime: "python"
 spec:
   replicas: 2
   selector:

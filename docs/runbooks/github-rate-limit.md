@@ -2,8 +2,8 @@
 
 ## Signals
 
-- `pcap_circuit_breaker_state{service="github"}` at 2 (OPEN)
-- `pcap_prs_created_total{result="error"}` rising
+- `kairos_circuit_breaker_state{service="github"}` at 2 (OPEN)
+- `kairos_prs_created_total{result="error"}` rising
 - Logs: `github: ... -> 403` or `429`
 
 ## Why this happens
@@ -17,22 +17,22 @@
 1. **Let the breaker recover.** Default `reset_timeout=60s`. The breaker will half-open automatically and retry.
 2. **Confirm token is valid:**
    ```bash
-   kubectl -n pcap exec deploy/pcap -- env | grep -c PCAP_GITHUB__TOKEN
+   kubectl -n kairos exec deploy/kairos -- env | grep -c KAIROS_GITHUB__TOKEN
    ```
-3. **Reduce pressure:** raise `PCAP_SCHEDULER__INTERVAL_MINUTES` to 60 or 120 temporarily.
+3. **Reduce pressure:** raise `KAIROS_SCHEDULER__INTERVAL_MINUTES` to 60 or 120 temporarily.
 4. **Switch to a GitHub App** if PAT limits are the issue (much higher quotas).
 
 ## Longer-term
 
 - Move from a shared PAT to a **GitHub App** with scoped repo permissions.
-- Split PCAP instances per namespace so rate-limit impact is bounded.
+- Split KAIROS instances per namespace so rate-limit impact is bounded.
 - If you're managing hundreds of workloads, consider batching — multiple decisions into one PR per workload window.
 
 ## Verification
 
 ```bash
-kubectl -n pcap port-forward svc/pcap 8080:8080 &
+kubectl -n kairos port-forward svc/kairos 8080:8080 &
 curl -s http://localhost:8080/metrics \
-  | grep 'pcap_circuit_breaker_state{service="github"}'
+  | grep 'kairos_circuit_breaker_state{service="github"}'
 # expect: 0
 ```

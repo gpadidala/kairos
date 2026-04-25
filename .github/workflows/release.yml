@@ -62,7 +62,7 @@ jobs:
 
       - name: Package Helm chart
         run: |
-          helm package deploy/helm/pcap --destination /tmp/chart
+          helm package deploy/helm/kairos --destination /tmp/chart
           ls -la /tmp/chart
 
       - name: Create GitHub release

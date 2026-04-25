@@ -1,7 +1,7 @@
-# PCAP edits the `replicaCount` and/or `resources.requests.*` fields on approved
+# KAIROS edits the `replicaCount` and/or `resources.requests.*` fields on approved
 # decisions. Comments + structure are preserved via ruamel.yaml round-trip.
 
-replicaCount: 3      # PCAP writes here on HORIZONTAL_UP / HORIZONTAL_DOWN
+replicaCount: 3      # KAIROS writes here on HORIZONTAL_UP / HORIZONTAL_DOWN
 
 image:
   repository: ghcr.io/your-org/payments-api
@@ -10,8 +10,8 @@ image:
 
 resources:
   requests:
-    cpu: 500m          # PCAP writes here on VERTICAL_UP
-    memory: 1Gi        # PCAP writes here on VERTICAL_UP
+    cpu: 500m          # KAIROS writes here on VERTICAL_UP
+    memory: 1Gi        # KAIROS writes here on VERTICAL_UP
   limits:
     cpu: "2"
     memory: 2Gi
@@ -23,7 +23,7 @@ service:
 keda:
   enabled: true
   scaledobject: payments-api-scaler
-  minReplicaCount: 2   # PCAP writes here on KEDA_PRESCALE
+  minReplicaCount: 2   # KAIROS writes here on KEDA_PRESCALE
   maxReplicaCount: 25
   triggers:
     - type: kafka

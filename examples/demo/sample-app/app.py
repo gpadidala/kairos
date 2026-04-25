@@ -22,7 +22,7 @@ from prometheus_client import (
 )
 from starlette.responses import Response
 
-app = FastAPI(title="payments-api (PCAP demo)")
+app = FastAPI(title="payments-api (KAIROS demo)")
 
 REQS = Counter("payments_requests_total", "Requests received.", ("method", "path"))
 LAT = Histogram(

@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from pcap.discovery.runtime_detector import detect_runtime
-from pcap.domain.enums import Runtime
+from kairos.discovery.runtime_detector import detect_runtime
+from kairos.domain.enums import Runtime
 
 
 def test_annotation_wins_over_label_and_image() -> None:
     r = detect_runtime(
-        annotations={"pcap.io/runtime": "go"},
+        annotations={"kairos.io/runtime": "go"},
         labels={"app.kubernetes.io/runtime": "jvm"},
         image="openjdk:21",
     )
@@ -47,7 +47,7 @@ def test_unknown_when_no_hints() -> None:
 
 def test_invalid_annotation_falls_through() -> None:
     # "rust" is not a valid Runtime value → ignored
-    r = detect_runtime(annotations={"pcap.io/runtime": "rust"}, image="python:3.12")
+    r = detect_runtime(annotations={"kairos.io/runtime": "rust"}, image="python:3.12")
     assert r == Runtime.PYTHON
 
 

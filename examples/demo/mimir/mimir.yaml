@@ -1,4 +1,4 @@
-# Minimal Mimir single-binary config for the PCAP demo.
+# Minimal Mimir single-binary config for the KAIROS demo.
 # Single-tenant; filesystem storage; in-memory ring.
 
 multitenancy_enabled: false

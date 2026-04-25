@@ -1,4 +1,4 @@
-# PCAP Architecture
+# KAIROS Architecture
 
 ## Component view
 
@@ -13,7 +13,7 @@ flowchart LR
     MIMIR[(Grafana Mimir<br/>long-term TSDB)]
     ALLOY -- remote_write --> MIMIR
 
-    subgraph PCAP[PCAP control plane]
+    subgraph KAIROS[KAIROS control plane]
       DISC[Workload Discovery]
       COLL[Metric Collector]
       FCST[Forecasting Engine<br/>Prophet ⇨ statistical fallback]
@@ -85,11 +85,11 @@ sequenceDiagram
 
 ## Domain contracts (§6)
 
-See [`src/pcap/domain/models.py`](./src/pcap/domain/models.py). **Every module boundary exchanges Pydantic v2 models.** No `dict[str, Any]` crosses package lines.
+See [`src/kairos/domain/models.py`](./src/kairos/domain/models.py). **Every module boundary exchanges Pydantic v2 models.** No `dict[str, Any]` crosses package lines.
 
 ## Resilience
 
-- **Circuit breakers** on every external client (`pybreaker`). Metric: `pcap_circuit_breaker_state{service}`.
+- **Circuit breakers** on every external client (`pybreaker`). Metric: `kairos_circuit_breaker_state{service}`.
 - **Retries** with exponential backoff + jitter (`tenacity`) — idempotent calls only.
 - **Bulkheads** — per-service concurrency semaphores.
 - **Dedup** via Redis SET NX EX. Keys: `pr:{uid}:{hash}`, `notify:{channel}:{hash}`, `forecast:{uid}:{metric}:{bucket}`.
@@ -97,12 +97,12 @@ See [`src/pcap/domain/models.py`](./src/pcap/domain/models.py). **Every module b
 
 ## Self-observability
 
-PCAP emits:
-- Prometheus metrics at `/metrics` (listed in `src/pcap/observability/metrics.py`)
+KAIROS emits:
+- Prometheus metrics at `/metrics` (listed in `src/kairos/observability/metrics.py`)
 - OpenTelemetry spans over each pipeline phase + external call
 - Structured JSON logs via `structlog` with correlation IDs
 
-A self-observability Grafana dashboard ships at `deploy/grafana/dashboards/pcap-platform.json`.
+A self-observability Grafana dashboard ships at `deploy/grafana/dashboards/kairos-platform.json`.
 
 ## Security posture
 

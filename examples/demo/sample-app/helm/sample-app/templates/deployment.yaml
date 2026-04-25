@@ -6,10 +6,10 @@ metadata:
     app.kubernetes.io/name: payments-api
     app.kubernetes.io/runtime: python
   annotations:
-    pcap.io/gitops-path: "apps/payments-api"
-    pcap.io/runtime: "python"
+    kairos.io/gitops-path: "apps/payments-api"
+    kairos.io/runtime: "python"
     {{- if .Values.keda.enabled }}
-    pcap.io/keda-scaledobject: {{ .Values.keda.scaledobject | quote }}
+    kairos.io/keda-scaledobject: {{ .Values.keda.scaledobject | quote }}
     {{- end }}
 spec:
   replicas: {{ .Values.replicaCount }}

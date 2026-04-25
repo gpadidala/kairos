@@ -1,7 +1,7 @@
-name: Validate PCAP-generated PRs
+name: Validate KAIROS-generated PRs
 
 # Drop this workflow into your GitOps repo. It runs on every PR — including
-# ones PCAP opens (identified by the `pcap` label).
+# ones KAIROS opens (identified by the `kairos` label).
 
 on:
   pull_request:
@@ -46,15 +46,15 @@ jobs:
             echo "No policies/ directory; skipping."
           fi
 
-      - name: PCAP PR invariants
-        if: contains(github.event.pull_request.labels.*.name, 'pcap')
+      - name: KAIROS PR invariants
+        if: contains(github.event.pull_request.labels.*.name, 'kairos')
         run: |
-          # PCAP-opened PRs must satisfy: branch pattern, title prefix, labels.
-          if [[ "${{ github.event.pull_request.head.ref }}" != pcap/* ]]; then
-            echo "::error::PCAP PR branch must start with 'pcap/'"
+          # KAIROS-opened PRs must satisfy: branch pattern, title prefix, labels.
+          if [[ "${{ github.event.pull_request.head.ref }}" != kairos/* ]]; then
+            echo "::error::KAIROS PR branch must start with 'kairos/'"
             exit 1
           fi
-          if [[ "${{ github.event.pull_request.title }}" != \[PCAP\]* ]]; then
-            echo "::error::PCAP PR title must start with '[PCAP]'"
+          if [[ "${{ github.event.pull_request.title }}" != \[KAIROS\]* ]]; then
+            echo "::error::KAIROS PR title must start with '[KAIROS]'"
             exit 1
           fi

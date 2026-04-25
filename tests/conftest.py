@@ -9,17 +9,17 @@ from datetime import UTC, datetime
 import pytest
 from fastapi.testclient import TestClient
 
-from pcap.api.app import create_app
-from pcap.config.settings import Settings, reset_settings_cache
-from pcap.domain.enums import Runtime, WorkloadKind
-from pcap.domain.models import Workload
+from kairos.api.app import create_app
+from kairos.config.settings import Settings, reset_settings_cache
+from kairos.domain.enums import Runtime, WorkloadKind
+from kairos.domain.models import Workload
 
 
 @pytest.fixture(autouse=True)
 def _isolate_env(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
-    """Strip any stray PCAP_* env vars so tests see defaults."""
+    """Strip any stray KAIROS_* env vars so tests see defaults."""
     for k in list(os.environ):
-        if k.startswith("PCAP_"):
+        if k.startswith("KAIROS_"):
             monkeypatch.delenv(k, raising=False)
     reset_settings_cache()
     yield
@@ -45,7 +45,7 @@ def sample_workload() -> Workload:
         kind=WorkloadKind.DEPLOYMENT,
         runtime=Runtime.JVM,
         labels={"app.kubernetes.io/name": "payments-api"},
-        annotations={"pcap.io/gitops-path": "apps/payments-api"},
+        annotations={"kairos.io/gitops-path": "apps/payments-api"},
         current_replicas=3,
         cpu_request="500m",
         cpu_limit="2",

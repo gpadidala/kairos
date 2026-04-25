@@ -31,20 +31,20 @@ FROM python:3.12-slim AS runtime
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PATH="/app/.venv/bin:$PATH" \
-    PCAP_HOME=/app
+    KAIROS_HOME=/app
 
 RUN apt-get update \
  && apt-get install -y --no-install-recommends ca-certificates tini \
  && rm -rf /var/lib/apt/lists/* \
- && groupadd --system --gid 10001 pcap \
- && useradd  --system --uid 10001 --gid pcap --home-dir /app --shell /sbin/nologin pcap \
+ && groupadd --system --gid 10001 kairos \
+ && useradd  --system --uid 10001 --gid kairos --home-dir /app --shell /sbin/nologin kairos \
  && mkdir -p /app /data \
- && chown -R pcap:pcap /app /data
+ && chown -R kairos:kairos /app /data
 
 WORKDIR /app
-COPY --from=builder --chown=pcap:pcap /build/.venv /app/.venv
-COPY --chown=pcap:pcap src /app/src
-COPY --chown=pcap:pcap pyproject.toml README.md /app/
+COPY --from=builder --chown=kairos:kairos /build/.venv /app/.venv
+COPY --chown=kairos:kairos src /app/src
+COPY --chown=kairos:kairos pyproject.toml README.md /app/
 
 USER 10001:10001
 EXPOSE 8080
@@ -53,4 +53,4 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8080/healthz', timeout=3).status == 200 else 1)"
 
 ENTRYPOINT ["/usr/bin/tini", "--"]
-CMD ["python", "-m", "pcap", "api"]
+CMD ["python", "-m", "kairos", "api"]

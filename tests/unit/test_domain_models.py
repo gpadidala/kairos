@@ -7,14 +7,14 @@ from datetime import UTC, datetime
 import pytest
 from pydantic import ValidationError
 
-from pcap.domain.enums import (
+from kairos.domain.enums import (
     ForecastModel,
     Runtime,
     ScalingAction,
     Severity,
     WorkloadKind,
 )
-from pcap.domain.models import (
+from kairos.domain.models import (
     Forecast,
     MetricPoint,
     MetricSeries,
@@ -55,7 +55,7 @@ def test_workload_rejects_bad_memory() -> None:
 
 
 def test_workload_exclude_annotation(sample_workload: Workload) -> None:
-    excluded = sample_workload.model_copy(update={"annotations": {"pcap.io/exclude": "true"}})
+    excluded = sample_workload.model_copy(update={"annotations": {"kairos.io/exclude": "true"}})
     assert excluded.is_excluded is True
 
 

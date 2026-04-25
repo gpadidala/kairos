@@ -9,11 +9,11 @@ import fakeredis.aioredis
 import pytest
 from pydantic import HttpUrl
 
-from pcap.collectors.keda_collector import KedaCollector
-from pcap.config.settings import RedisSettings, Settings
-from pcap.decision.engine import DecisionEngine
-from pcap.discovery.workload_discovery import WorkloadDiscovery, WorkloadSource
-from pcap.domain.enums import (
+from kairos.collectors.keda_collector import KedaCollector
+from kairos.config.settings import RedisSettings, Settings
+from kairos.decision.engine import DecisionEngine
+from kairos.discovery.workload_discovery import WorkloadDiscovery, WorkloadSource
+from kairos.domain.enums import (
     ForecastModel,
     LLMProviderName,
     NotificationChannel,
@@ -22,7 +22,7 @@ from pcap.domain.enums import (
     Severity,
     WorkloadKind,
 )
-from pcap.domain.models import (
+from kairos.domain.models import (
     Forecast,
     LLMAdvice,
     MetricPoint,
@@ -32,18 +32,18 @@ from pcap.domain.models import (
     ScalingDecision,
     Workload,
 )
-from pcap.forecasting.base import Forecaster, ForecastRequest
-from pcap.forecasting.ensemble import EnsembleForecaster
-from pcap.forecasting.statistical_forecaster import StatisticalForecaster
-from pcap.llm.advisor import LLMAdvisor
-from pcap.llm.base import LLMProvider, LLMResponse
-from pcap.llm.router import LLMRouter
-from pcap.notify.base import NotificationPayload, Notifier
-from pcap.notify.dispatcher import NotifyDispatcher
-from pcap.orchestrator.pipeline import Pipeline, PipelineDeps
-from pcap.storage.audit_store import JSONLogAuditStore
-from pcap.storage.dedup import DedupStore
-from pcap.storage.redis_client import RedisClient
+from kairos.forecasting.base import Forecaster, ForecastRequest
+from kairos.forecasting.ensemble import EnsembleForecaster
+from kairos.forecasting.statistical_forecaster import StatisticalForecaster
+from kairos.llm.advisor import LLMAdvisor
+from kairos.llm.base import LLMProvider, LLMResponse
+from kairos.llm.router import LLMRouter
+from kairos.notify.base import NotificationPayload, Notifier
+from kairos.notify.dispatcher import NotifyDispatcher
+from kairos.orchestrator.pipeline import Pipeline, PipelineDeps
+from kairos.storage.audit_store import JSONLogAuditStore
+from kairos.storage.dedup import DedupStore
+from kairos.storage.redis_client import RedisClient
 
 pytestmark = pytest.mark.e2e
 
@@ -164,7 +164,7 @@ class _StubPRCreator:
         return PRResult(
             url=HttpUrl("https://github.com/acme/gitops/pull/1"),
             number=1,
-            branch="pcap/test",
+            branch="kairos/test",
             files_changed=["apps/api/deployment.yaml"],
             dry_run=self._dry_run,
         )
@@ -277,7 +277,7 @@ async def test_pipeline_end_to_end_breach_triggers_pr_and_notifications(
         notifier=dispatcher,
         audit=JSONLogAuditStore(),
         settings=settings,
-        grafana_dashboard_url="https://grafana.example.com/d/pcap-predictions",
+        grafana_dashboard_url="https://grafana.example.com/d/kairos-predictions",
     )
     pipeline = Pipeline(deps)
 

@@ -2,8 +2,8 @@
 
 ## Signals
 
-- `pcap_llm_calls_total{result="http_error"}` or `{result="transport"}` rising
-- `pcap_circuit_breaker_state{service=~"llm_.*"}` = 2
+- `kairos_llm_calls_total{result="http_error"}` or `{result="transport"}` rising
+- `kairos_circuit_breaker_state{service=~"llm_.*"}` = 2
 - PRs opening with `advice.provider_used = "canned"`
 
 ## What's still working
@@ -22,7 +22,7 @@ You are not in an incident unless decisions themselves are failing.
 
 ### 1. Check which providers fail
 ```bash
-kubectl -n pcap logs deploy/pcap | grep llm_provider_failed
+kubectl -n kairos logs deploy/kairos | grep llm_provider_failed
 ```
 
 ### 2. Failover order
@@ -47,7 +47,7 @@ config:
 
 ### 4. Verify recovery
 ```bash
-kubectl -n pcap logs deploy/pcap | grep llm_advisor | tail -20
+kubectl -n kairos logs deploy/kairos | grep llm_advisor | tail -20
 ```
 Expect `provider_used` field to stop being `canned`.
 

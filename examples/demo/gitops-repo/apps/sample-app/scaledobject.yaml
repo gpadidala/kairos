@@ -12,7 +12,7 @@ spec:
     name: payments-api
   pollingInterval: 15
   cooldownPeriod: 60
-  minReplicaCount: 2        # PCAP may propose editing this on KEDA_PRESCALE
+  minReplicaCount: 2        # KAIROS may propose editing this on KEDA_PRESCALE
   maxReplicaCount: 25
   triggers:
     - type: kafka

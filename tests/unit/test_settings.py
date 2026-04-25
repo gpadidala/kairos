@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from pcap.config.settings import Settings
-from pcap.domain.enums import LLMProviderName
+from kairos.config.settings import Settings
+from kairos.domain.enums import LLMProviderName
 
 
 def test_defaults_load_cleanly() -> None:
@@ -17,8 +17,8 @@ def test_defaults_load_cleanly() -> None:
 
 
 def test_nested_env_override(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("PCAP_FEATURES__DRY_RUN", "false")
-    monkeypatch.setenv("PCAP_SCHEDULER__INTERVAL_MINUTES", "15")
+    monkeypatch.setenv("KAIROS_FEATURES__DRY_RUN", "false")
+    monkeypatch.setenv("KAIROS_SCHEDULER__INTERVAL_MINUTES", "15")
     s = Settings()
     assert s.features.dry_run is False
     assert s.scheduler.interval_minutes == 15

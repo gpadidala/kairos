@@ -8,13 +8,13 @@ from itertools import pairwise
 
 import pytest
 
-from pcap.domain.enums import ForecastModel
-from pcap.domain.exceptions import ForecastError
-from pcap.domain.models import MetricPoint, MetricSeries, Workload
-from pcap.forecasting.base import ForecastRequest
-from pcap.forecasting.ensemble import EnsembleForecaster
-from pcap.forecasting.feature_engineering import linear_slope, mape, robust_p95, rolling_mean
-from pcap.forecasting.statistical_forecaster import StatisticalForecaster
+from kairos.domain.enums import ForecastModel
+from kairos.domain.exceptions import ForecastError
+from kairos.domain.models import MetricPoint, MetricSeries, Workload
+from kairos.forecasting.base import ForecastRequest
+from kairos.forecasting.ensemble import EnsembleForecaster
+from kairos.forecasting.feature_engineering import linear_slope, mape, robust_p95, rolling_mean
+from kairos.forecasting.statistical_forecaster import StatisticalForecaster
 
 
 def _series(workload: Workload, values: list[float], *, step: int = 300) -> MetricSeries:

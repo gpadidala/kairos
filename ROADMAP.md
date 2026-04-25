@@ -1,4 +1,4 @@
-# PCAP Roadmap
+# KAIROS Roadmap
 
 ## v1.0 (current MVP)
 
@@ -20,7 +20,7 @@
 
 ## v1.2 — accuracy
 
-- **VPA cross-check** — compare PCAP vertical recommendations to VPA's
+- **VPA cross-check** — compare KAIROS vertical recommendations to VPA's
 - **Anomaly detection** branch (alongside forecasting) — flag outliers that shouldn't train the model
 - **Backtest harness** — replay last 30 days, score MAPE per model per workload
 - Seasonal holiday calendars per workload
@@ -33,7 +33,7 @@
 
 ## v2.0 — fleet
 
-- **Multi-cluster federation** — one PCAP, many AKS clusters
+- **Multi-cluster federation** — one KAIROS, many AKS clusters
 - **Chaos-driven validation** — inject load, compare actual vs forecast, auto-recalibrate
 - Cross-cluster workload migration advisories
 

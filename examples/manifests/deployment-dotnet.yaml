@@ -7,8 +7,8 @@ metadata:
     app.kubernetes.io/name: billing-svc
     app.kubernetes.io/runtime: dotnet
   annotations:
-    pcap.io/gitops-path: "apps/billing-svc"
-    pcap.io/runtime: "dotnet"
+    kairos.io/gitops-path: "apps/billing-svc"
+    kairos.io/runtime: "dotnet"
 spec:
   replicas: 3
   selector:

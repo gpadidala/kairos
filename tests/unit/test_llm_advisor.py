@@ -7,8 +7,8 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from pcap.config.settings import LLMSettings
-from pcap.domain.enums import (
+from kairos.config.settings import LLMSettings
+from kairos.domain.enums import (
     ForecastModel,
     LLMProviderName,
     Runtime,
@@ -16,11 +16,11 @@ from pcap.domain.enums import (
     Severity,
     WorkloadKind,
 )
-from pcap.domain.exceptions import LLMError
-from pcap.domain.models import Forecast, MetricPoint, ScalingDecision, Workload
-from pcap.llm.advisor import LLMAdvisor, _canned_advice
-from pcap.llm.base import LLMMessage, LLMProvider, LLMResponse
-from pcap.llm.router import LLMRouter
+from kairos.domain.exceptions import LLMError
+from kairos.domain.models import Forecast, MetricPoint, ScalingDecision, Workload
+from kairos.llm.advisor import LLMAdvisor, _canned_advice
+from kairos.llm.base import LLMMessage, LLMProvider, LLMResponse
+from kairos.llm.router import LLMRouter
 
 
 class _StubProvider(LLMProvider):

@@ -11,13 +11,13 @@ import pytest
 import respx
 from pydantic import SecretStr
 
-from pcap.config.settings import (
+from kairos.config.settings import (
     RedisSettings,
     SlackSettings,
     SMTPSettings,
     TeamsSettings,
 )
-from pcap.domain.enums import (
+from kairos.domain.enums import (
     ForecastModel,
     NotificationChannel,
     Runtime,
@@ -25,20 +25,20 @@ from pcap.domain.enums import (
     Severity,
     WorkloadKind,
 )
-from pcap.domain.models import (
+from kairos.domain.models import (
     Forecast,
     MetricPoint,
     NotificationResult,
     ScalingDecision,
     Workload,
 )
-from pcap.notify.base import NotificationPayload, Notifier
-from pcap.notify.dispatcher import NotifyDispatcher
-from pcap.notify.email import EmailNotifier, build_email
-from pcap.notify.slack import SlackNotifier, build_slack_blocks
-from pcap.notify.teams import TeamsNotifier, build_teams_card
-from pcap.storage.dedup import DedupStore
-from pcap.storage.redis_client import RedisClient
+from kairos.notify.base import NotificationPayload, Notifier
+from kairos.notify.dispatcher import NotifyDispatcher
+from kairos.notify.email import EmailNotifier, build_email
+from kairos.notify.slack import SlackNotifier, build_slack_blocks
+from kairos.notify.teams import TeamsNotifier, build_teams_card
+from kairos.storage.dedup import DedupStore
+from kairos.storage.redis_client import RedisClient
 
 
 def _payload() -> NotificationPayload:
@@ -82,7 +82,7 @@ def _payload() -> NotificationPayload:
         decision=d,
         advice=None,
         pr_url="https://github.com/acme/gitops/pull/42",
-        grafana_url="https://grafana.example.com/d/pcap-predictions",
+        grafana_url="https://grafana.example.com/d/kairos-predictions",
     )
 
 
@@ -103,7 +103,7 @@ def test_teams_card_shape() -> None:
 def test_slack_blocks_shape() -> None:
     p = _payload()
     blocks = build_slack_blocks(p)
-    assert blocks["text"].startswith("PCAP ")
+    assert blocks["text"].startswith("KAIROS ")
     types = [b["type"] for b in blocks["blocks"]]
     assert "header" in types
     assert "section" in types
@@ -113,10 +113,10 @@ def test_slack_blocks_shape() -> None:
 def test_email_returns_subject_html_plain() -> None:
     p = _payload()
     subject, html, plain = build_email(p)
-    assert "PCAP" in subject and "api" in subject
+    assert "KAIROS" in subject and "api" in subject
     assert "<html>" in html.lower()
     assert "<code>" in html
-    assert "PCAP:" in plain
+    assert "KAIROS:" in plain
 
 
 # ── Teams via respx ───────────────────────────────────────────────────
@@ -212,7 +212,7 @@ async def test_email_success() -> None:
         port=587,
         username=SecretStr("u"),
         password=SecretStr("p"),
-        from_addr="pcap@example.com",
+        from_addr="kairos@example.com",
         to_addrs=["oncall@example.com"],
     )
     n = EmailNotifier(settings, sender=_FakeSMTP)

@@ -1,4 +1,4 @@
-name: Validate PCAP PR
+name: Validate KAIROS PR
 
 on:
   pull_request:
@@ -45,10 +45,10 @@ jobs:
             echo "no policies directory — skipping"
           fi
 
-      - name: PCAP PR invariants
-        if: contains(github.event.pull_request.labels.*.name, 'pcap')
+      - name: KAIROS PR invariants
+        if: contains(github.event.pull_request.labels.*.name, 'kairos')
         run: |
-          [[ "${{ github.event.pull_request.head.ref }}" == pcap/* ]] || {
-            echo "::error::PCAP PR branch must start with 'pcap/'"; exit 1; }
-          [[ "${{ github.event.pull_request.title }}" == \[PCAP\]* ]] || {
-            echo "::error::PCAP PR title must start with '[PCAP]'"; exit 1; }
+          [[ "${{ github.event.pull_request.head.ref }}" == kairos/* ]] || {
+            echo "::error::KAIROS PR branch must start with 'kairos/'"; exit 1; }
+          [[ "${{ github.event.pull_request.title }}" == \[KAIROS\]* ]] || {
+            echo "::error::KAIROS PR title must start with '[KAIROS]'"; exit 1; }

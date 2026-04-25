@@ -4,7 +4,7 @@
   "schemaVersion": 39,
   "version": 0,
   "editable": true,
-  "tags": ["pcap", "keda", "demo"],
+  "tags": ["kairos", "keda", "demo"],
   "timezone": "utc",
   "time": {"from": "now-24h", "to": "now"},
   "refresh": "30s",

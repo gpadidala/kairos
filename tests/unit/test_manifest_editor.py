@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from pcap.gitops.manifest_editor import (
+from kairos.gitops.manifest_editor import (
     ManifestEditError,
     ManifestEditor,
     ManifestFormat,

@@ -1,11 +1,11 @@
-# PCAP — production-grade standalone Docker Compose stack.
+# KAIROS — production-grade standalone Docker Compose stack.
 #
 # One-liner (from the deploy/docker-compose/ directory):
 #
-#   docker compose --env-file .env -f compose/docker-compose.yml -p pcap up -d
+#   docker compose --env-file .env -f compose/docker-compose.yml -p kairos up -d
 #
 # Profiles:
-#   (default)  — PCAP + Redis + Mimir + Grafana
+#   (default)  — KAIROS + Redis + Mimir + Grafana
 #   demo       — adds the synthetic metric feeder
 #
 # See README.md for verify steps + corporate-env overrides.
@@ -13,7 +13,7 @@
 services:
   redis:
     image: redis:${REDIS_TAG:-7.4-alpine}
-    container_name: pcap-redis
+    container_name: kairos-redis
     command: ["redis-server", "--appendonly", "yes", "--save", "60", "1"]
     ports:
       - "${REDIS_PORT:-6379}:6379"
@@ -29,11 +29,11 @@ services:
       resources:
         limits:
           memory: ${REDIS_MEM_LIMIT:-512m}
-    networks: [pcap-net]
+    networks: [kairos-net]
 
   mimir:
     image: grafana/mimir:${MIMIR_TAG:-2.13.0}
-    container_name: pcap-mimir
+    container_name: kairos-mimir
     command: ["-config.file=/etc/mimir/mimir.yaml"]
     environment:
       HTTP_PROXY: ${HTTP_PROXY}
@@ -46,18 +46,18 @@ services:
       - "${MIMIR_PORT:-9009}:9009"
     # grafana/mimir is distroless-static — no wget/curl/sh available — so we
     # can't run an in-container healthcheck. Dependents use service_started
-    # and retry via their own clients (PCAP has a circuit breaker, Grafana
+    # and retry via their own clients (KAIROS has a circuit breaker, Grafana
     # retries datasource connectivity).
     restart: unless-stopped
     deploy:
       resources:
         limits:
           memory: ${MIMIR_MEM_LIMIT:-2g}
-    networks: [pcap-net]
+    networks: [kairos-net]
 
   grafana:
     image: grafana/grafana:${GRAFANA_TAG:-11.4.0}
-    container_name: pcap-grafana
+    container_name: kairos-grafana
     environment:
       GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
@@ -87,11 +87,11 @@ services:
       resources:
         limits:
           memory: ${GRAFANA_MEM_LIMIT:-1g}
-    networks: [pcap-net]
+    networks: [kairos-net]
 
-  pcap:
-    image: ${PCAP_IMAGE:-ghcr.io/your-org/pcap}:${PCAP_IMAGE_TAG:-0.1.0}
-    container_name: pcap
+  kairos:
+    image: ${KAIROS_IMAGE:-ghcr.io/your-org/kairos}:${KAIROS_IMAGE_TAG:-0.1.0}
+    container_name: kairos
     build:
       context: ../../..
       dockerfile: Dockerfile
@@ -100,49 +100,49 @@ services:
         HTTPS_PROXY: ${HTTPS_PROXY}
     environment:
       # ── Core ─────────────────────────────────────────────────────
-      PCAP_ENVIRONMENT: ${PCAP_ENVIRONMENT:-prod}
-      PCAP_LOGGING__LEVEL: ${PCAP_LOG_LEVEL:-INFO}
-      PCAP_LOGGING__JSON_FORMAT: "true"
+      KAIROS_ENVIRONMENT: ${KAIROS_ENVIRONMENT:-prod}
+      KAIROS_LOGGING__LEVEL: ${KAIROS_LOG_LEVEL:-INFO}
+      KAIROS_LOGGING__JSON_FORMAT: "true"
       # ── API ──────────────────────────────────────────────────────
-      PCAP_API__PORT: "8080"
-      PCAP_API__TOKEN_SHA256_LIST: ${PCAP_API_TOKEN_SHA256_LIST:-}
+      KAIROS_API__PORT: "8080"
+      KAIROS_API__TOKEN_SHA256_LIST: ${KAIROS_API_TOKEN_SHA256_LIST:-}
       # ── Feature toggles ──────────────────────────────────────────
-      PCAP_FEATURES__ENABLE_UI: ${PCAP_FEATURES_ENABLE_UI:-true}
-      PCAP_FEATURES__REQUIRE_UI_APPROVAL: ${PCAP_FEATURES_REQUIRE_UI_APPROVAL:-true}
-      PCAP_FEATURES__ENABLE_LLM: ${PCAP_FEATURES_ENABLE_LLM:-false}
-      PCAP_FEATURES__ENABLE_NOTIFICATIONS: ${PCAP_FEATURES_ENABLE_NOTIFICATIONS:-false}
-      PCAP_FEATURES__ENABLE_PR_CREATION: ${PCAP_FEATURES_ENABLE_PR_CREATION:-false}
-      PCAP_FEATURES__ENABLE_GRAFANA_PROVISIONING: "true"
-      PCAP_FEATURES__DRY_RUN: ${PCAP_FEATURES_DRY_RUN:-true}
+      KAIROS_FEATURES__ENABLE_UI: ${KAIROS_FEATURES_ENABLE_UI:-true}
+      KAIROS_FEATURES__REQUIRE_UI_APPROVAL: ${KAIROS_FEATURES_REQUIRE_UI_APPROVAL:-true}
+      KAIROS_FEATURES__ENABLE_LLM: ${KAIROS_FEATURES_ENABLE_LLM:-false}
+      KAIROS_FEATURES__ENABLE_NOTIFICATIONS: ${KAIROS_FEATURES_ENABLE_NOTIFICATIONS:-false}
+      KAIROS_FEATURES__ENABLE_PR_CREATION: ${KAIROS_FEATURES_ENABLE_PR_CREATION:-false}
+      KAIROS_FEATURES__ENABLE_GRAFANA_PROVISIONING: "true"
+      KAIROS_FEATURES__DRY_RUN: ${KAIROS_FEATURES_DRY_RUN:-true}
       # ── Scheduler ────────────────────────────────────────────────
-      PCAP_SCHEDULER__ENABLED: ${PCAP_SCHEDULER_ENABLED:-true}
-      PCAP_SCHEDULER__INTERVAL_MINUTES: ${PCAP_SCHEDULER_INTERVAL_MINUTES:-30}
+      KAIROS_SCHEDULER__ENABLED: ${KAIROS_SCHEDULER_ENABLED:-true}
+      KAIROS_SCHEDULER__INTERVAL_MINUTES: ${KAIROS_SCHEDULER_INTERVAL_MINUTES:-30}
       # ── Forecasting ──────────────────────────────────────────────
-      PCAP_FORECASTING__HORIZON_HOURS: ${PCAP_FORECASTING_HORIZON_HOURS:-48}
-      PCAP_FORECASTING__LOOKBACK_DAYS: ${PCAP_FORECASTING_LOOKBACK_DAYS:-1}
-      PCAP_FORECASTING__RESOLUTION_SECONDS: ${PCAP_FORECASTING_RESOLUTION_SECONDS:-60}
-      PCAP_FORECASTING__USE_PROPHET_IF_AVAILABLE: ${PCAP_FORECASTING_USE_PROPHET_IF_AVAILABLE:-false}
+      KAIROS_FORECASTING__HORIZON_HOURS: ${KAIROS_FORECASTING_HORIZON_HOURS:-48}
+      KAIROS_FORECASTING__LOOKBACK_DAYS: ${KAIROS_FORECASTING_LOOKBACK_DAYS:-1}
+      KAIROS_FORECASTING__RESOLUTION_SECONDS: ${KAIROS_FORECASTING_RESOLUTION_SECONDS:-60}
+      KAIROS_FORECASTING__USE_PROPHET_IF_AVAILABLE: ${KAIROS_FORECASTING_USE_PROPHET_IF_AVAILABLE:-false}
       # ── Mimir ────────────────────────────────────────────────────
-      PCAP_MIMIR__URL: ${PCAP_MIMIR_URL:-http://mimir:9009}
-      PCAP_MIMIR__ORG_ID: ${PCAP_MIMIR_ORG_ID:-}
+      KAIROS_MIMIR__URL: ${KAIROS_MIMIR_URL:-http://mimir:9009}
+      KAIROS_MIMIR__ORG_ID: ${KAIROS_MIMIR_ORG_ID:-}
       # ── Grafana ──────────────────────────────────────────────────
       # URL = server-side (api calls); EXTERNAL_URL = browser-facing links.
-      PCAP_GRAFANA__URL: ${PCAP_GRAFANA_URL:-http://grafana:3000}
-      PCAP_GRAFANA__EXTERNAL_URL: ${PCAP_GRAFANA_EXTERNAL_URL:-http://localhost:3000}
+      KAIROS_GRAFANA__URL: ${KAIROS_GRAFANA_URL:-http://grafana:3000}
+      KAIROS_GRAFANA__EXTERNAL_URL: ${KAIROS_GRAFANA_EXTERNAL_URL:-http://localhost:3000}
       # ── Redis ────────────────────────────────────────────────────
-      PCAP_REDIS__URL: "redis://redis:6379/0"
+      KAIROS_REDIS__URL: "redis://redis:6379/0"
       # ── Discovery (static) ───────────────────────────────────────
-      PCAP_K8S__MODE: "static"
-      PCAP_K8S__STATIC_WORKLOADS_FILE: "/config/pcap-workloads.yaml"
+      KAIROS_K8S__MODE: "static"
+      KAIROS_K8S__STATIC_WORKLOADS_FILE: "/config/kairos-workloads.yaml"
       # ── SQLite audit DB (in-volume) ──────────────────────────────
-      PCAP_AUDIT_DB__URL: "sqlite+aiosqlite:////data/pcap-audit.db"
+      KAIROS_AUDIT_DB__URL: "sqlite+aiosqlite:////data/kairos-audit.db"
       # ── GitHub ───────────────────────────────────────────────────
-      PCAP_GITHUB__REPO: ${PCAP_GITHUB_REPO:-}
-      PCAP_GITHUB__BASE_BRANCH: ${PCAP_GITHUB_BASE_BRANCH:-main}
+      KAIROS_GITHUB__REPO: ${KAIROS_GITHUB_REPO:-}
+      KAIROS_GITHUB__BASE_BRANCH: ${KAIROS_GITHUB_BASE_BRANCH:-main}
       # ── LLM ──────────────────────────────────────────────────────
-      PCAP_LLM__PRIMARY: ${PCAP_LLM_PRIMARY:-anthropic}
+      KAIROS_LLM__PRIMARY: ${KAIROS_LLM_PRIMARY:-anthropic}
       # ── Tracing off by default for corp (set OTel endpoint to enable) ─
-      PCAP_TRACING__ENABLED: "false"
+      KAIROS_TRACING__ENABLED: "false"
       # ── Corporate proxy ──────────────────────────────────────────
       HTTP_PROXY: ${HTTP_PROXY}
       HTTPS_PROXY: ${HTTPS_PROXY}
@@ -152,12 +152,12 @@ services:
       - path: .secrets.env
         required: false
     volumes:
-      - ../config/pcap/pcap-workloads.yaml:/config/pcap-workloads.yaml:ro
-      - pcap-data:/data
+      - ../config/kairos/kairos-workloads.yaml:/config/kairos-workloads.yaml:ro
+      - kairos-data:/data
       # Optional secrets directory (each file's contents becomes an env var via entrypoint hook below)
-      - ../.secrets:/run/pcap-secrets:ro
+      - ../.secrets:/run/kairos-secrets:ro
     ports:
-      - "${PCAP_API_PORT:-8090}:8080"
+      - "${KAIROS_API_PORT:-8090}:8080"
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8080/healthz',timeout=3).status==200 else 1)\""]
       interval: 15s
@@ -173,14 +173,14 @@ services:
     deploy:
       resources:
         limits:
-          memory: ${PCAP_MEM_LIMIT:-2g}
-          cpus: "${PCAP_CPU_LIMIT:-2}"
-    networks: [pcap-net]
+          memory: ${KAIROS_MEM_LIMIT:-2g}
+          cpus: "${KAIROS_CPU_LIMIT:-2}"
+    networks: [kairos-net]
 
   # ── Optional: synthetic-metrics feeder (enable with `--profile demo`) ──
   seed:
     image: python:3.12-slim
-    container_name: pcap-seed
+    container_name: kairos-seed
     profiles: ["demo"]
     working_dir: /seed
     volumes:
@@ -200,14 +200,14 @@ services:
       mimir:
         condition: service_started
     restart: unless-stopped
-    networks: [pcap-net]
+    networks: [kairos-net]
 
 volumes:
   redis-data: {}
   mimir-data: {}
   grafana-data: {}
-  pcap-data: {}
+  kairos-data: {}
 
 networks:
-  pcap-net:
+  kairos-net:
     driver: bridge

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
-from pcap.domain.enums import (
+from kairos.domain.enums import (
     ForecastModel,
     LLMProviderName,
     Runtime,
@@ -12,14 +12,14 @@ from pcap.domain.enums import (
     Severity,
     WorkloadKind,
 )
-from pcap.domain.models import (
+from kairos.domain.models import (
     Forecast,
     LLMAdvice,
     MetricPoint,
     ScalingDecision,
     Workload,
 )
-from pcap.gitops.pr_template import render_pr_body, render_pr_title
+from kairos.gitops.pr_template import render_pr_body, render_pr_title
 
 
 def _workload() -> Workload:
@@ -75,7 +75,7 @@ def _decision(w: Workload) -> ScalingDecision:
 
 def test_title_contains_kind_and_action() -> None:
     title = render_pr_title(_decision(_workload()))
-    assert title == "[PCAP] Scale Deployment/payments-api in prod: horizontal_up"
+    assert title == "[KAIROS] Scale Deployment/payments-api in prod: horizontal_up"
 
 
 def test_body_renders_summary_and_forecasts() -> None:

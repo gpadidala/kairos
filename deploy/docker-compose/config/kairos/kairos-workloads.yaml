@@ -1,0 +1,69 @@
+# Static workloads the demo KAIROS instance manages.
+# Matches the synthetic metrics the feeder pushes into Mimir.
+
+- name: payments-api
+  namespace: prod
+  kind: Deployment
+  runtime: jvm
+  current_replicas: 3
+  cpu_request: 500m
+  cpu_limit: "2"
+  mem_request: 1Gi
+  mem_limit: 2Gi
+  keda_scaledobject: payments-api-scaler
+  gitops_path: apps/payments-api
+  labels:
+    app.kubernetes.io/name: payments-api
+  annotations:
+    kairos.io/gitops-path: apps/payments-api
+    kairos.io/runtime: jvm
+    kairos.io/keda-scaledobject: payments-api-scaler
+
+- name: inference-api
+  namespace: prod
+  kind: Deployment
+  runtime: python
+  current_replicas: 2
+  cpu_request: 500m
+  cpu_limit: "2"
+  mem_request: 1Gi
+  mem_limit: 2Gi
+  gitops_path: apps/inference-api
+  labels:
+    app.kubernetes.io/name: inference-api
+  annotations:
+    kairos.io/gitops-path: apps/inference-api
+    kairos.io/runtime: python
+
+- name: event-router
+  namespace: staging
+  kind: Deployment
+  runtime: go
+  current_replicas: 4
+  cpu_request: 250m
+  cpu_limit: "1"
+  mem_request: 256Mi
+  mem_limit: 512Mi
+  keda_scaledobject: event-router-scaler
+  gitops_path: apps/event-router
+  labels:
+    app.kubernetes.io/name: event-router
+  annotations:
+    kairos.io/gitops-path: apps/event-router
+    kairos.io/runtime: go
+
+- name: billing-svc
+  namespace: prod
+  kind: Deployment
+  runtime: dotnet
+  current_replicas: 2
+  cpu_request: 500m
+  cpu_limit: "2"
+  mem_request: 1Gi
+  mem_limit: 2Gi
+  gitops_path: apps/billing-svc
+  labels:
+    app.kubernetes.io/name: billing-svc
+  annotations:
+    kairos.io/gitops-path: apps/billing-svc
+    kairos.io/runtime: dotnet

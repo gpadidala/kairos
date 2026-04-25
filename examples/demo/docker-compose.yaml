@@ -1,11 +1,11 @@
-# PCAP local demo — no AKS cluster required.
+# KAIROS local demo — no AKS cluster required.
 #
 #   docker compose up --build
 #
 #   Grafana:  http://localhost:3000   (admin / admin)
 #   Mimir:    http://localhost:9009   (OSS read/write)
-#   PCAP UI:  http://localhost:8090/ui
-#   PCAP API: http://localhost:8090/docs
+#   KAIROS UI:  http://localhost:8090/ui
+#   KAIROS API: http://localhost:8090/docs
 #
 # The `seed` service waits for Mimir to be ready, then continuously
 # writes synthetic AKS-style metrics (container CPU, memory working set,
@@ -61,35 +61,35 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
-  pcap:
+  kairos:
     build:
       context: ../../..
       dockerfile: Dockerfile
     environment:
-      PCAP_ENVIRONMENT: demo
-      PCAP_MIMIR__URL: "http://mimir:9009"
-      PCAP_GRAFANA__URL: "http://grafana:3000"
+      KAIROS_ENVIRONMENT: demo
+      KAIROS_MIMIR__URL: "http://mimir:9009"
+      KAIROS_GRAFANA__URL: "http://grafana:3000"
       # demo uses anonymous read; in real installs, populate via secret
-      PCAP_GRAFANA__API_TOKEN: ""
-      PCAP_AUDIT_DB__URL: "sqlite+aiosqlite:////data/pcap-audit.db"
+      KAIROS_GRAFANA__API_TOKEN: ""
+      KAIROS_AUDIT_DB__URL: "sqlite+aiosqlite:////data/kairos-audit.db"
       # Static discovery pointing at the bundled demo workloads
-      PCAP_K8S__MODE: "static"
-      PCAP_K8S__STATIC_WORKLOADS_FILE: "/config/demo-workloads.yaml"
+      KAIROS_K8S__MODE: "static"
+      KAIROS_K8S__STATIC_WORKLOADS_FILE: "/config/demo-workloads.yaml"
       # UI + approvals on. PR creation off (no real GitHub).
-      PCAP_FEATURES__ENABLE_UI: "true"
-      PCAP_FEATURES__REQUIRE_UI_APPROVAL: "true"
-      PCAP_FEATURES__ENABLE_PR_CREATION: "false"
-      PCAP_FEATURES__ENABLE_NOTIFICATIONS: "false"
-      PCAP_FEATURES__ENABLE_LLM: "false"
-      PCAP_FEATURES__DRY_RUN: "true"
-      PCAP_SCHEDULER__ENABLED: "false"
-      PCAP_TRACING__ENABLED: "false"
-      PCAP_LOGGING__JSON_FORMAT: "false"
-      PCAP_FORECASTING__LOOKBACK_DAYS: "1"
-      PCAP_FORECASTING__USE_PROPHET_IF_AVAILABLE: "false"
+      KAIROS_FEATURES__ENABLE_UI: "true"
+      KAIROS_FEATURES__REQUIRE_UI_APPROVAL: "true"
+      KAIROS_FEATURES__ENABLE_PR_CREATION: "false"
+      KAIROS_FEATURES__ENABLE_NOTIFICATIONS: "false"
+      KAIROS_FEATURES__ENABLE_LLM: "false"
+      KAIROS_FEATURES__DRY_RUN: "true"
+      KAIROS_SCHEDULER__ENABLED: "false"
+      KAIROS_TRACING__ENABLED: "false"
+      KAIROS_LOGGING__JSON_FORMAT: "false"
+      KAIROS_FORECASTING__LOOKBACK_DAYS: "1"
+      KAIROS_FORECASTING__USE_PROPHET_IF_AVAILABLE: "false"
     volumes:
-      - ./pcap-config:/config:ro
-      - pcap-data:/data
+      - ./kairos-config:/config:ro
+      - kairos-data:/data
     ports:
       - "8090:8080"
     depends_on:
@@ -99,4 +99,4 @@ services:
 volumes:
   mimir-data: {}
   grafana-data: {}
-  pcap-data: {}
+  kairos-data: {}

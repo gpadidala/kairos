@@ -8,11 +8,11 @@ import httpx
 import pytest
 import respx
 
-from pcap.collectors.mimir_client import MimirClient
-from pcap.config.settings import MimirSettings
-from pcap.domain.exceptions import ExternalServiceError
-from pcap.domain.models import Workload
-from pcap.resilience.breakers import reset_all_breakers
+from kairos.collectors.mimir_client import MimirClient
+from kairos.config.settings import MimirSettings
+from kairos.domain.exceptions import ExternalServiceError
+from kairos.domain.models import Workload
+from kairos.resilience.breakers import reset_all_breakers
 
 pytestmark = pytest.mark.integration
 

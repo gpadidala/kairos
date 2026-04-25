@@ -1,15 +1,15 @@
-# PCAP — Docker Compose Stack
+# KAIROS — Docker Compose Stack
 
-The production-shaped way to run PCAP in a corporate environment **without Kubernetes**. Same binary, same UI, same features — just packaged as a self-contained Compose stack with bundled Mimir + Grafana + Redis.
+The production-shaped way to run KAIROS in a corporate environment **without Kubernetes**. Same binary, same UI, same features — just packaged as a self-contained Compose stack with bundled Mimir + Grafana + Redis.
 
 ## What's in the box
 
 ```
-pcap-mimir    :9009   long-term TSDB (filesystem storage by default)
-pcap-grafana  :3000   dashboards + unified alerting — pre-provisioned
-pcap-redis    :6379   dedup + forecast cache
-pcap          :8090   PCAP control plane + HTMX UI + Swagger
-pcap-seed             (optional, --profile demo) — synthetic AKS metrics feeder
+kairos-mimir    :9009   long-term TSDB (filesystem storage by default)
+kairos-grafana  :3000   dashboards + unified alerting — pre-provisioned
+kairos-redis    :6379   dedup + forecast cache
+kairos          :8090   KAIROS control plane + HTMX UI + Swagger
+kairos-seed             (optional, --profile demo) — synthetic AKS metrics feeder
 ```
 
 All four volumes are persistent. Stopping the stack (`make down`) keeps your audit DB + Grafana state.
@@ -41,7 +41,7 @@ cd deploy\docker-compose
 ```bash
 cd deploy/docker-compose
 cp .env.example .env
-docker-compose --env-file .env -f compose/docker-compose.yml -p pcap up -d --build
+docker-compose --env-file .env -f compose/docker-compose.yml -p kairos up -d --build
 ```
 
 ### Verify
@@ -54,7 +54,7 @@ curl http://localhost:3000/api/health
 curl http://localhost:9009/ready
 ```
 
-Open **http://localhost:8090/ui** — lands on the PCAP dashboard.
+Open **http://localhost:8090/ui** — lands on the KAIROS dashboard.
 
 ## 2. Common operations
 
@@ -77,7 +77,7 @@ All containers honor `HTTP_PROXY` / `HTTPS_PROXY` / `NO_PROXY`. Edit `.env`:
 ```bash
 HTTP_PROXY=http://proxy.corp.example.com:8080
 HTTPS_PROXY=http://proxy.corp.example.com:8080
-NO_PROXY=localhost,127.0.0.1,.svc,.cluster.local,pcap,redis,mimir,grafana
+NO_PROXY=localhost,127.0.0.1,.svc,.cluster.local,kairos,redis,mimir,grafana
 ```
 
 Proxy values are passed as `docker build` args (so image layer fetches work) AND as container runtime env (so outbound calls from Python / Mimir / Grafana go through the proxy).
@@ -87,8 +87,8 @@ Proxy values are passed as `docker build` args (so image layer fetches work) AND
 Override image refs in `.env`:
 
 ```bash
-PCAP_IMAGE=registry.corp.example.com/observability/pcap
-PCAP_IMAGE_TAG=0.1.0
+KAIROS_IMAGE=registry.corp.example.com/observability/kairos
+KAIROS_IMAGE_TAG=0.1.0
 REDIS_TAG=7.4-alpine
 MIMIR_TAG=2.13.0
 GRAFANA_TAG=11.4.0
@@ -100,12 +100,12 @@ GRAFANA_TAG=11.4.0
    ```bash
    ./scripts/pull-images.sh
    mkdir -p offline
-   for img in redis:7.4-alpine grafana/mimir:2.13.0 grafana/grafana:11.4.0 python:3.12-slim ghcr.io/your-org/pcap:0.1.0; do
+   for img in redis:7.4-alpine grafana/mimir:2.13.0 grafana/grafana:11.4.0 python:3.12-slim ghcr.io/your-org/kairos:0.1.0; do
      docker save "$img" -o "offline/$(echo $img | tr '/:' '__').tar"
    done
-   tar cvzf pcap-offline.tgz offline/
+   tar cvzf kairos-offline.tgz offline/
    ```
-2. Transfer `pcap-offline.tgz` to the air-gapped host, `docker load -i offline/*.tar`, then run `make up`.
+2. Transfer `kairos-offline.tgz` to the air-gapped host, `docker load -i offline/*.tar`, then run `make up`.
 
 ### Secrets (don't commit .env)
 
@@ -113,15 +113,15 @@ Drop one file per secret into `.secrets/` (gitignored). Supported mappings:
 
 | File | Env var |
 |---|---|
-| `.secrets/github-token` | `PCAP_GITHUB__TOKEN` |
-| `.secrets/anthropic-api-key` | `PCAP_LLM__ANTHROPIC__API_KEY` |
-| `.secrets/openai-api-key` | `PCAP_LLM__OPENAI__API_KEY` |
-| `.secrets/grafana-api-token` | `PCAP_GRAFANA__API_TOKEN` |
-| `.secrets/mimir-bearer` | `PCAP_MIMIR__AUTH_BEARER` |
-| `.secrets/teams-webhook-url` | `PCAP_TEAMS__WEBHOOK_URL` |
-| `.secrets/slack-webhook-url` | `PCAP_SLACK__WEBHOOK_URL` |
+| `.secrets/github-token` | `KAIROS_GITHUB__TOKEN` |
+| `.secrets/anthropic-api-key` | `KAIROS_LLM__ANTHROPIC__API_KEY` |
+| `.secrets/openai-api-key` | `KAIROS_LLM__OPENAI__API_KEY` |
+| `.secrets/grafana-api-token` | `KAIROS_GRAFANA__API_TOKEN` |
+| `.secrets/mimir-bearer` | `KAIROS_MIMIR__AUTH_BEARER` |
+| `.secrets/teams-webhook-url` | `KAIROS_TEAMS__WEBHOOK_URL` |
+| `.secrets/slack-webhook-url` | `KAIROS_SLACK__WEBHOOK_URL` |
 
-The PCAP container mounts `.secrets/` at `/run/pcap-secrets` read-only; an optional `.secrets.env` next to `.env` is also sourced if present. Alternatively, use Docker Swarm secrets / Vault Agent / CSI for production.
+The KAIROS container mounts `.secrets/` at `/run/kairos-secrets` read-only; an optional `.secrets.env` next to `.env` is also sourced if present. Alternatively, use Docker Swarm secrets / Vault Agent / CSI for production.
 
 ### API authentication
 
@@ -130,32 +130,32 @@ Generate SHA-256 digests of your accepted bearer tokens, comma-separate them, an
 ```bash
 echo -n "your-real-api-token" | shasum -a 256
 # → 1a2b3c4d... 
-PCAP_API_TOKEN_SHA256_LIST=1a2b3c4d...,5e6f7a8b...
+KAIROS_API_TOKEN_SHA256_LIST=1a2b3c4d...,5e6f7a8b...
 ```
 
 Leave blank for lab mode (open access).
 
 ## 4. Point at your real Grafana / Mimir
 
-The bundled Mimir + Grafana exist for air-gapped and demo use. To point PCAP at your corporate Grafana stack instead:
+The bundled Mimir + Grafana exist for air-gapped and demo use. To point KAIROS at your corporate Grafana stack instead:
 
 ```bash
 # In .env
-PCAP_MIMIR_URL=https://mimir.corp.example.com
-PCAP_MIMIR_ORG_ID=production
-PCAP_GRAFANA_URL=https://grafana.corp.example.com
+KAIROS_MIMIR_URL=https://mimir.corp.example.com
+KAIROS_MIMIR_ORG_ID=production
+KAIROS_GRAFANA_URL=https://grafana.corp.example.com
 # and drop bearer/api-token files into .secrets/
 ```
 
-Then start only the PCAP + Redis services:
+Then start only the KAIROS + Redis services:
 
 ```bash
-docker compose --env-file .env -f compose/docker-compose.yml -p pcap up -d redis pcap
+docker compose --env-file .env -f compose/docker-compose.yml -p kairos up -d redis kairos
 ```
 
 ## 5. Workload inventory
 
-The bundled `config/pcap/pcap-workloads.yaml` lists the four demo workloads. Replace with your own real workload list — one entry per Deployment / StatefulSet / DaemonSet PCAP should forecast for:
+The bundled `config/kairos/kairos-workloads.yaml` lists the four demo workloads. Replace with your own real workload list — one entry per Deployment / StatefulSet / DaemonSet KAIROS should forecast for:
 
 ```yaml
 - name: my-api
@@ -170,11 +170,11 @@ The bundled `config/pcap/pcap-workloads.yaml` lists the four demo workloads. Rep
   keda_scaledobject: my-api-scaler
   gitops_path: apps/my-api
   annotations:
-    pcap.io/gitops-path: apps/my-api
-    pcap.io/runtime: jvm
+    kairos.io/gitops-path: apps/my-api
+    kairos.io/runtime: jvm
 ```
 
-For dynamic k8s-API discovery set `PCAP_K8S__MODE=in_cluster` and give the container a kubeconfig via bind-mount (not covered here — that's what the Helm chart at `../helm/pcap/` is for).
+For dynamic k8s-API discovery set `KAIROS_K8S__MODE=in_cluster` and give the container a kubeconfig via bind-mount (not covered here — that's what the Helm chart at `../helm/kairos/` is for).
 
 ## 6. Enabling GitHub PR creation
 
@@ -182,38 +182,38 @@ For dynamic k8s-API discovery set `PCAP_K8S__MODE=in_cluster` and give the conta
 2. Drop it into `.secrets/github-token`.
 3. In `.env`:
    ```bash
-   PCAP_FEATURES_ENABLE_PR_CREATION=true
-   PCAP_FEATURES_DRY_RUN=false
-   PCAP_GITHUB_REPO=your-org/your-gitops-repo
-   PCAP_GITHUB_BASE_BRANCH=main
+   KAIROS_FEATURES_ENABLE_PR_CREATION=true
+   KAIROS_FEATURES_DRY_RUN=false
+   KAIROS_GITHUB_REPO=your-org/your-gitops-repo
+   KAIROS_GITHUB_BASE_BRANCH=main
    ```
 4. `make restart` and approve a pending decision in the UI — a real PR opens.
 
 ## 7. Updating
 
 1. `cd deploy/docker-compose`
-2. Edit `PCAP_IMAGE_TAG` in `.env`
+2. Edit `KAIROS_IMAGE_TAG` in `.env`
 3. `make restart`
 
-The audit DB is schema-versioned (SQLAlchemy models in `src/pcap/storage/db.py`); schema migrations happen on container start via `create_all`. For breaking changes, run `make backup` first.
+The audit DB is schema-versioned (SQLAlchemy models in `src/kairos/storage/db.py`); schema migrations happen on container start via `create_all`. For breaking changes, run `make backup` first.
 
 ## 8. Troubleshooting
 
 | Symptom | Check |
 |---|---|
-| `port is already allocated: 8090` | Set `PCAP_API_PORT=8091` in `.env` (or `GRAFANA_PORT` / `MIMIR_PORT` / `REDIS_PORT`) |
+| `port is already allocated: 8090` | Set `KAIROS_API_PORT=8091` in `.env` (or `GRAFANA_PORT` / `MIMIR_PORT` / `REDIS_PORT`) |
 | `error while attempting to bind on address ('0.0.0.0', 8080)` in container logs | Host port conflict — see above |
-| UI shows empty approvals after a run | Workloads file or Mimir metrics missing. `make logs pcap` will show `pipeline_run_started` + `workload_processing_failed` lines |
+| UI shows empty approvals after a run | Workloads file or Mimir metrics missing. `make logs kairos` will show `pipeline_run_started` + `workload_processing_failed` lines |
 | Grafana dashboards show `no data` | Mimir doesn't have data yet. If you want synthetic data, run `make demo-up` to enable the feeder |
-| Approve button does nothing | Check `make logs pcap` — usually `pr_creator_not_configured` in lab mode (that's expected; in demo mode the DemoPRCreator logs a fake PR instead) |
+| Approve button does nothing | Check `make logs kairos` — usually `pr_creator_not_configured` in lab mode (that's expected; in demo mode the DemoPRCreator logs a fake PR instead) |
 | Stack hangs on first `make up` behind a corporate proxy | Confirm `HTTP_PROXY` / `HTTPS_PROXY` in `.env`; `docker info` should show "HTTP Proxy" set |
 | `permission denied` on `.secrets/` | `chmod 700 .secrets && chmod 600 .secrets/*` |
 
 ## 9. What's NOT in this stack
 
-- **No Kubernetes.** If you want PCAP running inside AKS (the intended prod deploy), use the Helm chart at [`../helm/pcap/`](../helm/pcap/) instead.
-- **No Alloy / OTel collector.** PCAP emits Prometheus metrics on `:8080/metrics`; scrape it with your existing stack.
-- **No real PRs by default.** `DemoPRCreator` simulates them so the UI flow works end-to-end without GitHub. Flip `PCAP_FEATURES_ENABLE_PR_CREATION=true` + drop a token into `.secrets/` for the real thing.
+- **No Kubernetes.** If you want KAIROS running inside AKS (the intended prod deploy), use the Helm chart at [`../helm/kairos/`](../helm/kairos/) instead.
+- **No Alloy / OTel collector.** KAIROS emits Prometheus metrics on `:8080/metrics`; scrape it with your existing stack.
+- **No real PRs by default.** `DemoPRCreator` simulates them so the UI flow works end-to-end without GitHub. Flip `KAIROS_FEATURES_ENABLE_PR_CREATION=true` + drop a token into `.secrets/` for the real thing.
 
 ---
 

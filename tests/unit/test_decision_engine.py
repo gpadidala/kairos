@@ -8,17 +8,17 @@ import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from pcap.collectors.keda_collector import KedaLagSnapshot
-from pcap.config.settings import DecisionSettings, FeatureFlags
-from pcap.decision.engine import DecisionEngine
-from pcap.decision.rules import DecisionInput
-from pcap.domain.enums import (
+from kairos.collectors.keda_collector import KedaLagSnapshot
+from kairos.config.settings import DecisionSettings, FeatureFlags
+from kairos.decision.engine import DecisionEngine
+from kairos.decision.rules import DecisionInput
+from kairos.domain.enums import (
     ForecastModel,
     Runtime,
     ScalingAction,
     WorkloadKind,
 )
-from pcap.domain.models import Forecast, MetricPoint, Workload
+from kairos.domain.models import Forecast, MetricPoint, Workload
 
 
 # ── Builders ──────────────────────────────────────────────────────────

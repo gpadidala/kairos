@@ -1,4 +1,4 @@
-"""Synthetic AKS-style metric feeder for the PCAP demo.
+"""Synthetic AKS-style metric feeder for the KAIROS demo.
 
 Writes:
 - container_cpu_usage_seconds_total (counter, rate → cores)
@@ -12,9 +12,9 @@ Writes:
 - kube_pod_container_status_restarts_total
 
 Three demo workloads match the sample app + bundled manifests:
-- prod/payments-api      (JVM, KEDA, CPU climbing → PCAP proposes HORIZONTAL_UP)
-- prod/inference-api     (Python, mem breach → PCAP proposes VERTICAL_UP)
-- staging/event-router   (Go, low util → PCAP proposes HORIZONTAL_DOWN)
+- prod/payments-api      (JVM, KEDA, CPU climbing → KAIROS proposes HORIZONTAL_UP)
+- prod/inference-api     (Python, mem breach → KAIROS proposes VERTICAL_UP)
+- staging/event-router   (Go, low util → KAIROS proposes HORIZONTAL_DOWN)
 
 Sends every SEED_INTERVAL_SECONDS (default 15). Uses Prometheus remote-write
 (protobuf + snappy).
@@ -149,7 +149,7 @@ def push(mimir_url: str, series: list[tuple[dict[str, str], float, int]]) -> Non
         headers={
             "Content-Type": "application/x-protobuf",
             "Content-Encoding": "snappy",
-            "User-Agent": "pcap-demo-feeder/0.1",
+            "User-Agent": "kairos-demo-feeder/0.1",
             "X-Prometheus-Remote-Write-Version": "0.1.0",
         },
     )

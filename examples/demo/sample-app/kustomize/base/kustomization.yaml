@@ -3,7 +3,7 @@ kind: Kustomization
 namespace: prod
 commonLabels:
   app.kubernetes.io/name: payments-api
-  app.kubernetes.io/part-of: pcap-demo
+  app.kubernetes.io/part-of: kairos-demo
 resources:
   - ../../manifests/deployment.yaml
   - ../../manifests/scaledobject.yaml

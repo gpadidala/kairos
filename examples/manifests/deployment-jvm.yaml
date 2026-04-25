@@ -7,9 +7,9 @@ metadata:
     app.kubernetes.io/name: payments-api
     app.kubernetes.io/runtime: jvm
   annotations:
-    pcap.io/gitops-path: "apps/payments-api"
-    pcap.io/runtime: "jvm"
-    pcap.io/keda-scaledobject: "payments-api-scaler"
+    kairos.io/gitops-path: "apps/payments-api"
+    kairos.io/runtime: "jvm"
+    kairos.io/keda-scaledobject: "payments-api-scaler"
 spec:
   replicas: 3
   selector:

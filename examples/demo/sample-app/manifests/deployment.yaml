@@ -7,11 +7,11 @@ metadata:
     app.kubernetes.io/name: payments-api
     app.kubernetes.io/runtime: python
   annotations:
-    pcap.io/gitops-path: "apps/payments-api"
-    pcap.io/runtime: "python"
-    pcap.io/keda-scaledobject: "payments-api-scaler"
+    kairos.io/gitops-path: "apps/payments-api"
+    kairos.io/runtime: "python"
+    kairos.io/keda-scaledobject: "payments-api-scaler"
 spec:
-  replicas: 3  # PCAP edits this line on horizontal scale
+  replicas: 3  # KAIROS edits this line on horizontal scale
   selector:
     matchLabels:
       app.kubernetes.io/name: payments-api

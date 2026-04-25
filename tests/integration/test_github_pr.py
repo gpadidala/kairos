@@ -11,25 +11,25 @@ import pytest
 import respx
 from pydantic import SecretStr
 
-from pcap.config.settings import GitHubSettings, RedisSettings
-from pcap.domain.enums import (
+from kairos.config.settings import GitHubSettings, RedisSettings
+from kairos.domain.enums import (
     ForecastModel,
     Runtime,
     ScalingAction,
     Severity,
     WorkloadKind,
 )
-from pcap.domain.models import (
+from kairos.domain.models import (
     Forecast,
     MetricPoint,
     ScalingDecision,
     Workload,
 )
-from pcap.gitops.github_client import GitHubClient, PRCreator
-from pcap.gitops.repo_layout import RepoLayout
-from pcap.resilience.breakers import reset_all_breakers
-from pcap.storage.dedup import DedupStore
-from pcap.storage.redis_client import RedisClient
+from kairos.gitops.github_client import GitHubClient, PRCreator
+from kairos.gitops.repo_layout import RepoLayout
+from kairos.resilience.breakers import reset_all_breakers
+from kairos.storage.dedup import DedupStore
+from kairos.storage.redis_client import RedisClient
 
 pytestmark = pytest.mark.integration
 
@@ -128,7 +128,7 @@ def gh_settings() -> GitHubSettings:
         token=SecretStr("ghs_test"),
         repo="acme/gitops",
         base_branch="main",
-        labels=["pcap", "autoscaling"],
+        labels=["kairos", "autoscaling"],
         reviewers=["platform-team"],
     )
 
@@ -151,7 +151,7 @@ async def test_dry_run_skips_github_calls(
     assert result is not None
     assert result.dry_run is True
     assert result.dedup_hit is False
-    assert result.branch.startswith("pcap/prod-payments-api-")
+    assert result.branch.startswith("kairos/prod-payments-api-")
     # No respx routes configured — would fail if any HTTP call was made
     await gh_client.aclose()
 

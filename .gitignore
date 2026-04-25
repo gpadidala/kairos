@@ -74,9 +74,9 @@ sbom.spdx
 signatures/
 
 # Helm
-deploy/helm/pcap/charts/
-deploy/helm/pcap/Chart.lock
-deploy/helm/pcap/*.tgz
+deploy/helm/kairos/charts/
+deploy/helm/kairos/Chart.lock
+deploy/helm/kairos/*.tgz
 
 # Docker
 .dockerignore.bak

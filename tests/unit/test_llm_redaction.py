@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from pcap.llm.advisor import redact_pii
+from kairos.llm.advisor import redact_pii
 
 
 def test_redacts_ipv4() -> None:

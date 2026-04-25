@@ -1,0 +1,21 @@
+apiVersion: v2
+name: kairos
+description: KAIROS — Predictive Capacity & Autoscaling Platform for AKS
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+keywords:
+  - kubernetes
+  - aks
+  - autoscaling
+  - forecasting
+  - gitops
+  - keda
+  - observability
+home: https://github.com/your-org/kairos
+sources:
+  - https://github.com/your-org/kairos
+maintainers:
+  - name: KAIROS Maintainers
+annotations:
+  category: Observability

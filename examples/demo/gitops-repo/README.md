@@ -1,11 +1,11 @@
 # Sample GitOps Repo Layout
 
-This is the layout the **GitOps repo** would have on the other side of PCAP's PRs. Argo CD or Flux would sync this repo into AKS.
+This is the layout the **GitOps repo** would have on the other side of KAIROS's PRs. Argo CD or Flux would sync this repo into AKS.
 
 ```
 gitops-repo/
 ├── apps/
-│   ├── payments-api/           ← PCAP edits deployment.yaml or values.yaml here
+│   ├── payments-api/           ← KAIROS edits deployment.yaml or values.yaml here
 │   │   ├── deployment.yaml
 │   │   ├── scaledobject.yaml
 │   │   └── values.yaml         (if Helm-based)
@@ -13,14 +13,14 @@ gitops-repo/
 │   ├── event-router/
 │   └── billing-svc/
 ├── policies/                   ← OPA/Rego rules enforced in PR validation
-│   └── pcap-invariants.rego
+│   └── kairos-invariants.rego
 └── .github/workflows/
     └── validate.yml            ← runs kubeconform + conftest on every PR
 ```
 
-## Resolution rules PCAP uses
+## Resolution rules KAIROS uses
 
-- **Path:** `apps/{workload.name}/` (overridable via `pcap.io/gitops-path` annotation)
+- **Path:** `apps/{workload.name}/` (overridable via `kairos.io/gitops-path` annotation)
 - **Files tried (in order):**
   1. `deployment.yaml` — Kustomize-style direct Deployment manifest
   2. `values.yaml` — Helm values file
@@ -30,9 +30,9 @@ The first file that exists + contains editable fields is modified. Others are le
 
 ## Branch + commit naming
 
-Every PCAP PR:
-- Branch: `pcap/{namespace}-{name}-{yyyymmdd-hhmm}`
-- Title: `[PCAP] Scale {kind}/{name} in {namespace}: {action}`
-- Body: rendered from `src/pcap/gitops/pr_template.py` (forecast chart link, rationale, LLM advice, reviewer checklist, decision hash)
-- Labels: `pcap`, `autoscaling`, `{action}`, `severity:{severity}`
-- Reviewers: configured via `PCAP_GITHUB__REVIEWERS` + workload annotation `pcap.io/reviewers`
+Every KAIROS PR:
+- Branch: `kairos/{namespace}-{name}-{yyyymmdd-hhmm}`
+- Title: `[KAIROS] Scale {kind}/{name} in {namespace}: {action}`
+- Body: rendered from `src/kairos/gitops/pr_template.py` (forecast chart link, rationale, LLM advice, reviewer checklist, decision hash)
+- Labels: `kairos`, `autoscaling`, `{action}`, `severity:{severity}`
+- Reviewers: configured via `KAIROS_GITHUB__REVIEWERS` + workload annotation `kairos.io/reviewers`

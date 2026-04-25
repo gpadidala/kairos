@@ -23,7 +23,7 @@ Prophet handles daily + weekly seasonality with minimal tuning and produces pred
 - Confidence score derived from prediction interval width and historical MAPE, normalized to [0, 1].
 
 ## Consequences
-- PCAP keeps functioning when Prophet is unavailable — the statistical fallback is a first-class citizen, not a stub.
+- KAIROS keeps functioning when Prophet is unavailable — the statistical fallback is a first-class citizen, not a stub.
 - Unit tests assert both paths produce `Forecast` objects with the contract intact.
 - Operators can force `ForecastingSettings.use_prophet_if_available=false` to run statistical-only in resource-constrained environments.
 - Future work (ADR not yet written): add LSTM/Transformer backends selectable per workload.
