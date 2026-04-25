@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import structlog
 from sqlalchemy import desc, select
@@ -170,6 +170,72 @@ class SQLAuditStore:
                 "pending_approvals": len(pending),
                 "alerts_firing": len(firing),
             }
+
+    async def activity_summary(self, *, days: int = 7) -> dict[str, list[dict[str, object]]]:
+        """Power the dashboard activity panels.
+
+        Returns:
+          decisions_per_day:    [{day, count}] oldest→newest
+          actions_breakdown:    [{action, count}] sorted desc
+          approvals_breakdown:  [{status, count}]
+          alerts_breakdown:     [{state, count}]
+          prs_per_day:          [{day, count}] oldest→newest
+        """
+        now = datetime.now(UTC)
+        since = (now - timedelta(days=days - 1)).replace(hour=0, minute=0, second=0, microsecond=0)
+        async with self._db.session() as s:
+            decisions = list(
+                (
+                    await s.execute(
+                        select(DecisionRow).where(DecisionRow.created_at >= since)
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            prs = list(
+                (await s.execute(select(PRRow).where(PRRow.created_at >= since))).scalars().all()
+            )
+            approvals = list((await s.execute(select(ApprovalRow))).scalars().all())
+            alerts = list((await s.execute(select(AlertRow))).scalars().all())
+
+        # Per-day buckets
+        per_day_dec: dict[str, int] = {}
+        per_day_pr: dict[str, int] = {}
+        for i in range(days):
+            day = (since + timedelta(days=i)).strftime("%Y-%m-%d")
+            per_day_dec[day] = 0
+            per_day_pr[day] = 0
+        for dec in decisions:
+            day = dec.created_at.astimezone(UTC).strftime("%Y-%m-%d")
+            if day in per_day_dec:
+                per_day_dec[day] += 1
+        for pr in prs:
+            day = pr.created_at.astimezone(UTC).strftime("%Y-%m-%d")
+            if day in per_day_pr:
+                per_day_pr[day] += 1
+
+        actions: dict[str, int] = {}
+        for dec in decisions:
+            actions[dec.action] = actions.get(dec.action, 0) + 1
+
+        approval_states: dict[str, int] = {}
+        for ap in approvals:
+            approval_states[ap.status] = approval_states.get(ap.status, 0) + 1
+
+        alert_states: dict[str, int] = {}
+        for al in alerts:
+            alert_states[al.state] = alert_states.get(al.state, 0) + 1
+
+        actions_sorted = sorted(actions.items(), key=lambda kv: -kv[1])
+
+        return {
+            "decisions_per_day": [{"day": k, "count": v} for k, v in per_day_dec.items()],
+            "prs_per_day": [{"day": k, "count": v} for k, v in per_day_pr.items()],
+            "actions_breakdown": [{"action": k, "count": v} for k, v in actions_sorted],
+            "approvals_breakdown": [{"status": k, "count": v} for k, v in approval_states.items()],
+            "alerts_breakdown": [{"state": k, "count": v} for k, v in alert_states.items()],
+        }
 
     async def aclose(self) -> None:
         return None

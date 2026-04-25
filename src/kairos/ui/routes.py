@@ -91,11 +91,23 @@ def build_ui_router() -> APIRouter:  # noqa: PLR0915 — single factory register
         }
         status_counts: dict[str, int] = {}
         recent_runs: list[Any] = []
+        activity: dict[str, list[dict[str, object]]] = {
+            "decisions_per_day": [],
+            "prs_per_day": [],
+            "actions_breakdown": [],
+            "approvals_breakdown": [],
+            "alerts_breakdown": [],
+        }
         if audit is not None:
             counters = await audit.counters_24h()
             recent_runs = await audit.recent_runs(limit=10)
+            activity = await audit.activity_summary(days=7)
         if approvals is not None:
             status_counts = await approvals.counts()
+        settings_obj = deps["settings"]
+        gh_repo_url = (
+            f"https://github.com/{settings_obj.github.repo}" if settings_obj.github.repo else None
+        )
         return templates.TemplateResponse(
             request,
             "dashboard.html.j2",
@@ -104,6 +116,9 @@ def build_ui_router() -> APIRouter:  # noqa: PLR0915 — single factory register
                 counters=counters,
                 status_counts=status_counts,
                 recent_runs=recent_runs,
+                activity=activity,
+                grafana_url=settings_obj.grafana.public_url,
+                github_url=gh_repo_url,
             ),
         )
 
