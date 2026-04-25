@@ -185,7 +185,9 @@ def test_ui_dashboard_renders(client: TestClient) -> None:
     r = client.get("/ui/dashboard")
     assert r.status_code == 200
     assert "Overview" in r.text
-    assert "Pending approvals" in r.text
+    # Glass UI uses concise "Pending" stat-card label + link to /ui/pending
+    assert "Pending" in r.text
+    assert "/ui/pending" in r.text
 
 
 def test_ui_pending_empty(client: TestClient) -> None:

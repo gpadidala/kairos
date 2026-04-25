@@ -2,53 +2,68 @@
 {% set active = "alerts" %}
 {% block title %}Active Alerts{% endblock %}
 {% block content %}
-<div class="flex items-center justify-between mb-6">
+<div class="flex items-end justify-between mb-8">
   <div>
-    <h1 class="text-2xl font-bold">Active Alerts</h1>
-    <p class="text-sm text-slate-500">Pulled live from Grafana unified alerting.</p>
+    <h1 class="text-3xl font-bold tracking-tight mb-1">Active Alerts</h1>
+    <p class="text-sm text-white/55">Live from Grafana unified alerting.</p>
   </div>
   {% if grafana_url %}
-  <a href="{{ grafana_url }}/alerting/list" target="_blank"
-     class="text-sm text-blue-600 hover:underline">Open in Grafana →</a>
+  <a href="{{ grafana_url }}/alerting/list" target="_blank" class="btn-glass btn-glass-sm">
+    <svg viewBox="0 0 24 24" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M14 3h7v7m0-7L10 14m-3-7H4a1 1 0 00-1 1v13a1 1 0 001 1h13a1 1 0 001-1v-3" />
+    </svg>
+    Open in Grafana
+  </a>
   {% endif %}
 </div>
 
 {% if not alerts %}
-  <div class="bg-white rounded-lg border border-slate-200 p-12 text-center text-slate-400">
-    <p class="text-lg">No active alerts.</p>
-    <p class="text-sm mt-1">Either the cluster is healthy or Grafana is not configured / unreachable.</p>
+  <div class="glass p-16 text-center">
+    <div class="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-emerald-400/30 to-blue-400/30 grid place-items-center ring-1 ring-white/10">
+      <svg viewBox="0 0 24 24" class="w-8 h-8 text-emerald-300" fill="none" stroke="currentColor" stroke-width="2">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+      </svg>
+    </div>
+    <p class="text-lg text-white/85 font-medium">No active alerts</p>
+    <p class="text-sm text-white/45 mt-1">Either the cluster is healthy or Grafana isn't reachable.</p>
   </div>
 {% endif %}
 
-<div class="space-y-3">
+<div class="space-y-4">
 {% for a in alerts %}
-  <div class="bg-white rounded-lg border border-slate-200 p-4">
-    <div class="flex items-start justify-between">
-      <div>
-        <div class="flex items-center gap-2 mb-1">
-          <span class="badge
-            {% if a.state == 'alerting' %}bg-rose-100 text-rose-700
-            {% elif a.state == 'pending' %}bg-amber-100 text-amber-700
-            {% else %}bg-slate-100 text-slate-700{% endif %}">
+  <div class="glass p-5">
+    <div class="flex items-start justify-between gap-6">
+      <div class="flex-1 min-w-0">
+        <div class="flex items-center gap-2 mb-2 flex-wrap">
+          <span class="pill
+            {% if a.state == 'alerting' %}pill-danger
+            {% elif a.state == 'pending' %}pill-warn
+            {% else %}pill-info{% endif %}">
+            <span class="w-1.5 h-1.5 rounded-full bg-current"></span>
             {{ a.state }}
           </span>
-          <span class="badge bg-slate-100 text-slate-700 mono text-[10px]">{{ a.severity }}</span>
+          <span class="pill pill-mono">{{ a.severity }}</span>
         </div>
-        <h2 class="text-lg font-semibold">{{ a.title }}</h2>
+        <h2 class="text-lg font-semibold tracking-tight">{{ a.title }}</h2>
         {% if a.summary %}
-          <p class="text-sm text-slate-600 mt-1">{{ a.summary }}</p>
+          <p class="text-sm text-white/70 mt-1 leading-relaxed">{{ a.summary }}</p>
         {% endif %}
       </div>
-      <div class="text-right text-xs text-slate-500">
-        {% if a.starts_at %}<div>Since <span class="mono">{{ a.starts_at }}</span></div>{% endif %}
+      <div class="text-right text-xs text-white/45 shrink-0">
+        {% if a.starts_at %}<div class="mono">since {{ a.starts_at }}</div>{% endif %}
       </div>
     </div>
     {% if a.labels %}
-    <details class="mt-3">
-      <summary class="text-xs text-slate-600 cursor-pointer">Labels</summary>
-      <div class="mt-2 text-xs mono bg-slate-50 p-2 rounded border border-slate-200">
+    <details class="mt-4">
+      <summary class="text-xs text-white/55 inline-flex items-center gap-1 hover:text-white/85">
+        <svg viewBox="0 0 24 24" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
+        </svg>
+        Labels
+      </summary>
+      <div class="mt-2 text-xs mono p-3 rounded-xl glass space-y-1 text-white/75">
         {% for k, v in a.labels.items() %}
-          <div><strong>{{ k }}</strong>=<span>{{ v }}</span></div>
+          <div><span class="text-blue-300">{{ k }}</span>=<span>{{ v }}</span></div>
         {% endfor %}
       </div>
     </details>

@@ -2,69 +2,127 @@
 {% set active = "dashboard" %}
 {% block title %}Overview{% endblock %}
 {% block content %}
-<h1 class="text-2xl font-bold mb-2">Overview</h1>
-<p class="text-sm text-slate-500 mb-6">
-  PCAP — {{ settings.environment }} · dry_run=<span class="mono">{{ settings.features.dry_run }}</span>
-  · require_ui_approval=<span class="mono">{{ settings.features.require_ui_approval }}</span>
-</p>
+<div class="mb-8">
+  <h1 class="text-3xl font-bold tracking-tight mb-1">Overview</h1>
+  <p class="text-sm text-white/55">
+    {{ settings.environment }} ·
+    <span class="mono">dry_run={{ settings.features.dry_run }}</span> ·
+    <span class="mono">require_ui_approval={{ settings.features.require_ui_approval }}</span>
+  </p>
+</div>
 
-<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-  <div class="bg-white rounded-lg border border-slate-200 p-4">
-    <div class="text-xs uppercase text-slate-500">Pending approvals</div>
-    <div class="text-3xl font-bold mt-1">{{ counters.pending_approvals }}</div>
-    <a href="/ui/pending" class="text-xs text-blue-600 hover:underline">Review →</a>
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-10">
+  <div class="glass p-5">
+    <div class="flex items-center justify-between mb-3">
+      <span class="text-[11px] uppercase tracking-widest text-white/50">Pending</span>
+      <span class="w-2 h-2 rounded-full bg-amber-400 shadow-[0_0_12px_rgba(251,191,36,0.7)] animate-pulse"></span>
+    </div>
+    <div class="stat-number">{{ counters.pending_approvals }}</div>
+    <a href="/ui/pending" class="inline-flex items-center gap-1 text-xs text-blue-300 hover:text-blue-200 mt-3">
+      Review
+      <svg viewBox="0 0 24 24" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
+      </svg>
+    </a>
   </div>
-  <div class="bg-white rounded-lg border border-slate-200 p-4">
-    <div class="text-xs uppercase text-slate-500">Decisions today</div>
-    <div class="text-3xl font-bold mt-1">{{ counters.decisions_today }}</div>
+
+  <div class="glass p-5">
+    <div class="flex items-center justify-between mb-3">
+      <span class="text-[11px] uppercase tracking-widest text-white/50">Decisions today</span>
+      <svg viewBox="0 0 24 24" class="w-4 h-4 text-white/40" fill="none" stroke="currentColor" stroke-width="2">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+      </svg>
+    </div>
+    <div class="stat-number">{{ counters.decisions_today }}</div>
+    <p class="text-xs text-white/40 mt-3">{{ recent_runs | length }} recent runs</p>
   </div>
-  <div class="bg-white rounded-lg border border-slate-200 p-4">
-    <div class="text-xs uppercase text-slate-500">PRs opened today</div>
-    <div class="text-3xl font-bold mt-1">{{ counters.prs_today }}</div>
+
+  <div class="glass p-5">
+    <div class="flex items-center justify-between mb-3">
+      <span class="text-[11px] uppercase tracking-widest text-white/50">PRs today</span>
+      <svg viewBox="0 0 24 24" class="w-4 h-4 text-white/40" fill="none" stroke="currentColor" stroke-width="2">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M8 7l-4 4 4 4M16 7l4 4-4 4M14 4l-4 16" />
+      </svg>
+    </div>
+    <div class="stat-number">{{ counters.prs_today }}</div>
+    <p class="text-xs text-white/40 mt-3">Opened against GitOps repo</p>
   </div>
-  <div class="bg-white rounded-lg border border-slate-200 p-4">
-    <div class="text-xs uppercase text-slate-500">Approvals by status</div>
-    <ul class="text-xs mt-2 space-y-1">
+
+  <div class="glass p-5">
+    <div class="flex items-center justify-between mb-3">
+      <span class="text-[11px] uppercase tracking-widest text-white/50">Status mix</span>
+      <svg viewBox="0 0 24 24" class="w-4 h-4 text-white/40" fill="none" stroke="currentColor" stroke-width="2">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M3 12l2-2 4 4 8-8 4 4" />
+      </svg>
+    </div>
+    <ul class="text-xs space-y-1.5 mt-1">
       {% for status, count in status_counts.items() %}
-        <li class="flex justify-between"><span class="mono">{{ status }}</span><span class="font-bold">{{ count }}</span></li>
+        <li class="flex items-center justify-between">
+          <span class="pill pill-mono
+            {% if status == 'applied' %}pill-success
+            {% elif status == 'rejected' %}pill-warn
+            {% elif status == 'failed' %}pill-danger
+            {% elif status == 'pending' %}pill-info
+            {% endif %}">{{ status }}</span>
+          <span class="font-semibold text-white/85">{{ count }}</span>
+        </li>
       {% else %}
-        <li class="text-slate-400">No data yet</li>
+        <li class="text-white/40 text-xs mt-1">No data yet</li>
       {% endfor %}
     </ul>
   </div>
 </div>
 
-<h2 class="text-lg font-semibold mb-3">Recent pipeline runs</h2>
-<div class="bg-white rounded-lg border border-slate-200 overflow-hidden">
-  <table class="w-full text-sm">
-    <thead class="bg-slate-100 text-slate-600 text-xs uppercase">
+<div class="flex items-center justify-between mb-4">
+  <h2 class="text-lg font-semibold tracking-tight">Recent runs</h2>
+  <button
+    hx-post="/api/v1/runs"
+    hx-vals='{"dry_run": true}'
+    hx-headers='{"Content-Type": "application/json"}'
+    hx-swap="none"
+    hx-on::after-request="setTimeout(()=>window.location.reload(),500)"
+    class="btn-glass btn-glass-sm">
+    <svg viewBox="0 0 24 24" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h5M20 20v-5h-5M4 20l16-16" />
+    </svg>
+    Trigger run
+  </button>
+</div>
+
+<div class="glass overflow-hidden">
+  <table class="glass-table">
+    <thead>
       <tr>
-        <th class="text-left px-4 py-2">Run ID</th>
-        <th class="text-left px-4 py-2">Status</th>
-        <th class="text-right px-4 py-2">Workloads</th>
-        <th class="text-left px-4 py-2">Started</th>
-        <th class="text-left px-4 py-2">Ended</th>
+        <th>Run</th>
+        <th>Status</th>
+        <th class="text-right">Workloads</th>
+        <th>Started</th>
+        <th>Ended</th>
       </tr>
     </thead>
-    <tbody class="divide-y divide-slate-100">
+    <tbody>
       {% for r in recent_runs %}
       <tr>
-        <td class="px-4 py-2 mono text-xs">{{ r.id[:8] }}…</td>
-        <td class="px-4 py-2">
-          <span class="badge
-            {% if r.status == 'succeeded' %}bg-emerald-100 text-emerald-700
-            {% elif r.status == 'partial' %}bg-amber-100 text-amber-700
-            {% elif r.status == 'failed' %}bg-rose-100 text-rose-700
-            {% else %}bg-slate-100 text-slate-700{% endif %}">
+        <td class="mono text-xs text-white/70">{{ r.id[:8] }}…</td>
+        <td>
+          <span class="pill
+            {% if r.status == 'succeeded' %}pill-success
+            {% elif r.status == 'partial' %}pill-warn
+            {% elif r.status == 'failed' %}pill-danger
+            {% else %}pill-info{% endif %}">
+            <span class="w-1.5 h-1.5 rounded-full bg-current opacity-70"></span>
             {{ r.status }}
           </span>
         </td>
-        <td class="px-4 py-2 text-right">{{ r.workloads_processed }}</td>
-        <td class="px-4 py-2 mono text-xs">{{ r.started_at.strftime('%Y-%m-%d %H:%M') }}</td>
-        <td class="px-4 py-2 mono text-xs">{{ r.ended_at.strftime('%Y-%m-%d %H:%M') if r.ended_at else '—' }}</td>
+        <td class="text-right mono text-xs">{{ r.workloads_processed }}</td>
+        <td class="mono text-xs text-white/60">{{ r.started_at.strftime('%Y-%m-%d %H:%M') }}</td>
+        <td class="mono text-xs text-white/60">{{ r.ended_at.strftime('%H:%M:%S') if r.ended_at else '—' }}</td>
       </tr>
       {% else %}
-      <tr><td colspan="5" class="px-4 py-6 text-center text-slate-400">No runs yet — trigger one: <span class="mono">POST /api/v1/runs</span></td></tr>
+      <tr><td colspan="5" class="text-center py-12 text-white/40">
+        <div class="text-sm">No runs yet — trigger one above.</div>
+        <div class="text-xs mt-1 mono text-white/30">POST /api/v1/runs</div>
+      </td></tr>
       {% endfor %}
     </tbody>
   </table>

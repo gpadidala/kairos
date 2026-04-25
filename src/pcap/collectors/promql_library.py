@@ -31,12 +31,20 @@ class QueryName(StrEnum):
     # .NET
     DOTNET_GC_HEAP_SIZE = "dotnet_gc_heap_size"
     DOTNET_THREADPOOL = "dotnet_threadpool_thread_count"
-    # KEDA
+    # KEDA — full metric set per https://keda.sh/docs/latest/integrations/prometheus/
     KEDA_METRIC_VALUE = "keda_scaler_metrics_value"
     KEDA_SCALER_ACTIVE = "keda_scaler_active"
+    KEDA_SCALER_ERRORS_TOTAL = "keda_scaler_errors_total"
+    KEDA_SCALER_ERRORS_RATE_5M = "keda_scaler_errors_rate_5m"
+    KEDA_SCALER_LATENCY_SECONDS = "keda_scaler_metrics_latency_seconds"
+    KEDA_SCALED_OBJECT_ERRORS_TOTAL = "keda_scaled_object_errors_total"
+    KEDA_INTERNAL_LOOP_LATENCY = "keda_internal_scale_loop_latency_seconds"
+    KEDA_RESOURCE_REGISTERED = "keda_resource_registered_total"
+    KEDA_BUILD_INFO = "keda_build_info"
     # KEDA activity + node-pool panels (UI)
     KEDA_REPLICAS_ADDED_24H = "keda_replicas_added_24h"
     KEDA_SCALE_EVENTS_24H = "keda_scale_events_24h"
+    KEDA_SCALER_HEALTH = "keda_scaler_health"
     NODE_POOL_SIZE = "node_pool_size"
     NODE_POOL_DELTA_24H = "node_pool_delta_24h"
 
@@ -101,6 +109,44 @@ _QUERIES: dict[QueryName, Template] = {
     ),
     QueryName.KEDA_SCALER_ACTIVE: Template(
         'max(keda_scaler_active{namespace="$namespace",scaledobject="$scaledobject"})'
+    ),
+    # Per-scaler error counter — non-zero rate suggests a flapping/broken trigger.
+    QueryName.KEDA_SCALER_ERRORS_TOTAL: Template(
+        'sum(keda_scaler_errors_total{namespace="$namespace",scaledobject="$scaledobject"})'
+    ),
+    QueryName.KEDA_SCALER_ERRORS_RATE_5M: Template(
+        "sum by (namespace, scaledobject) (rate(keda_scaler_errors_total[5m]))"
+    ),
+    # Latency of the scaler's metric-fetch step. High latency = pre-scale risk.
+    QueryName.KEDA_SCALER_LATENCY_SECONDS: Template(
+        "histogram_quantile(0.95, "
+        "sum by (le, namespace, scaledobject) ("
+        'rate(keda_scaler_metrics_latency_seconds_bucket{namespace="$namespace"}[5m])'
+        "))"
+    ),
+    # ScaledObject-level errors (validation, dependency lookups, status patch failures).
+    QueryName.KEDA_SCALED_OBJECT_ERRORS_TOTAL: Template(
+        "sum by (namespace, scaledobject) (rate(keda_scaled_object_errors_total[5m]))"
+    ),
+    # KEDA operator's internal scale-loop latency (p95, controller-wide).
+    QueryName.KEDA_INTERNAL_LOOP_LATENCY: Template(
+        "histogram_quantile(0.95, "
+        "sum by (le) (rate(keda_internal_scale_loop_latency_seconds_bucket[5m]))"
+        ")"
+    ),
+    # Number of KEDA-registered resources by kind — useful for fleet view.
+    QueryName.KEDA_RESOURCE_REGISTERED: Template(
+        "sum by (resource) (keda_resource_registered_total)"
+    ),
+    # KEDA operator build info — exposed as a constant gauge of 1.
+    QueryName.KEDA_BUILD_INFO: Template("keda_build_info"),
+    # Composite "scaler health": 1 when active + zero recent errors, 0 otherwise.
+    QueryName.KEDA_SCALER_HEALTH: Template(
+        "(max by (namespace, scaledobject) ("
+        'keda_scaler_active{namespace="$namespace",scaledobject="$scaledobject"}'
+        ") == 1) "
+        "and on(namespace, scaledobject) "
+        "(sum by (namespace, scaledobject) (rate(keda_scaler_errors_total[5m])) == 0)"
     ),
     # Across all KEDA-managed deployments, 24h replica delta.
     QueryName.KEDA_REPLICAS_ADDED_24H: Template(

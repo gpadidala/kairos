@@ -68,3 +68,54 @@ def test_keda_query_renders() -> None:
 def test_all_queries_are_unique() -> None:
     names = PromQLLibrary.all_queries()
     assert len(names) == len(set(names))
+
+
+def test_keda_scaler_errors_total_renders() -> None:
+    q = PromQLLibrary.render(
+        QueryName.KEDA_SCALER_ERRORS_TOTAL, namespace="prod", scaledobject="api-scaler"
+    )
+    assert "keda_scaler_errors_total" in q
+    assert 'scaledobject="api-scaler"' in q
+
+
+def test_keda_scaler_latency_renders() -> None:
+    q = PromQLLibrary.render(QueryName.KEDA_SCALER_LATENCY_SECONDS, namespace="prod")
+    assert "histogram_quantile(0.95" in q
+    assert "keda_scaler_metrics_latency_seconds_bucket" in q
+
+
+def test_keda_internal_loop_latency_no_args() -> None:
+    q = PromQLLibrary.render(QueryName.KEDA_INTERNAL_LOOP_LATENCY)
+    assert "keda_internal_scale_loop_latency_seconds_bucket" in q
+
+
+def test_keda_build_info_no_args() -> None:
+    q = PromQLLibrary.render(QueryName.KEDA_BUILD_INFO)
+    assert q == "keda_build_info"
+
+
+def test_keda_scaler_health_composite() -> None:
+    q = PromQLLibrary.render(
+        QueryName.KEDA_SCALER_HEALTH, namespace="prod", scaledobject="api-scaler"
+    )
+    assert "keda_scaler_active" in q
+    assert "keda_scaler_errors_total" in q
+    assert "and on(" in q
+
+
+def test_full_keda_metric_set_present() -> None:
+    """Every metric KEDA exposes per the official docs has a query in our library."""
+    expected = {
+        QueryName.KEDA_METRIC_VALUE,
+        QueryName.KEDA_SCALER_ACTIVE,
+        QueryName.KEDA_SCALER_ERRORS_TOTAL,
+        QueryName.KEDA_SCALER_ERRORS_RATE_5M,
+        QueryName.KEDA_SCALER_LATENCY_SECONDS,
+        QueryName.KEDA_SCALED_OBJECT_ERRORS_TOTAL,
+        QueryName.KEDA_INTERNAL_LOOP_LATENCY,
+        QueryName.KEDA_RESOURCE_REGISTERED,
+        QueryName.KEDA_BUILD_INFO,
+    }
+    available = set(PromQLLibrary.all_queries())
+    missing = expected - available
+    assert not missing, f"missing KEDA queries: {missing}"
