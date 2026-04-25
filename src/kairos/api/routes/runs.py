@@ -92,8 +92,27 @@ async def _build_pipeline(request: Request) -> Any:
 
     mimir = MimirClient(settings.mimir)
     keda = KedaCollector(mimir)
-    forecaster = EnsembleForecaster(use_prophet=settings.forecasting.use_prophet_if_available)
-    engine = DecisionEngine(settings.decision, settings.features)
+    from kairos.forecasting.prophet_forecaster import ProphetForecaster  # noqa: PLC0415
+
+    prophet = ProphetForecaster(
+        weekly=settings.forecasting.weekly_seasonality,
+        monthly=settings.forecasting.monthly_seasonality,
+        yearly_min_days=settings.forecasting.yearly_seasonality_min_days,
+        holiday_calendars=settings.forecasting.holiday_calendars,
+    )
+    forecaster = EnsembleForecaster(
+        use_prophet=settings.forecasting.use_prophet_if_available,
+        prophet=prophet,
+    )
+    from kairos.cost.estimator import CostRates  # noqa: PLC0415
+
+    cost_rates = CostRates(
+        cpu_per_hour=settings.cost.cpu_per_hour,
+        mem_gib_per_hour=settings.cost.mem_gib_per_hour,
+        currency=settings.cost.currency,
+        hours_per_month=settings.cost.hours_per_month,
+    )
+    engine = DecisionEngine(settings.decision, settings.features, cost_rates=cost_rates)
 
     # Audit: prefer SQL store when the DB bootstrapped successfully.
     audit = getattr(state, "sql_audit", None) or JSONLogAuditStore()

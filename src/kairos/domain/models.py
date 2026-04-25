@@ -144,6 +144,23 @@ class Forecast(BaseModel):
         return self
 
 
+class CostImpact(BaseModel):
+    """Monthly $ delta surfaced on each ScalingDecision (deterministic estimate)."""
+
+    model_config = _strict()
+
+    currency: str = Field(default="USD", min_length=1, max_length=8)
+    current_monthly: float = Field(ge=0)
+    projected_monthly: float = Field(ge=0)
+    delta_monthly: float
+    delta_percent: float
+    direction: Literal["up", "down", "flat"]
+    cpu_share_monthly: float = Field(ge=0)
+    mem_share_monthly: float = Field(ge=0)
+    cpu_per_hour: float = Field(gt=0)
+    mem_gib_per_hour: float = Field(gt=0)
+
+
 class ScalingDecision(BaseModel):
     """Deterministic output of the decision engine for one workload."""
 
@@ -164,6 +181,7 @@ class ScalingDecision(BaseModel):
     correlation_id: str = Field(min_length=1)
     generated_at: datetime
     requires_approval: bool = False
+    cost: CostImpact | None = None
 
     @field_validator("target_cpu_request")
     @classmethod
@@ -202,7 +220,12 @@ class ScalingDecision(BaseModel):
 
 
 class LLMAdvice(BaseModel):
-    """LLM-generated human-readable guidance attached to a decision."""
+    """LLM-generated human-readable guidance attached to a decision.
+
+    Adds three platform/SRE-lead-oriented fields beyond the engineer-facing
+    instructions: cost_commentary (org-level cost framing), cost_tag (tri-state
+    pill), and anomaly_note (flags forecasts that look unlike recent history).
+    """
 
     model_config = _strict()
 
@@ -211,8 +234,17 @@ class LLMAdvice(BaseModel):
     risks_of_inaction: str = Field(min_length=1)
     engineer_steps: list[str] = Field(min_length=1)
     validation_steps: list[str] = Field(min_length=1)
+    cost_commentary: str = Field(
+        default="",
+        description="Cost-impact paragraph: framing for an org-level approver",
+    )
+    cost_tag: Literal["savings", "uplift", "steady"] = "steady"
+    anomaly_note: str | None = Field(
+        default=None,
+        description="Flagged when the forecast pattern is unusual vs recent history",
+    )
     provider_used: LLMProviderName
-    prompt_version: str = Field(default="v1")
+    prompt_version: str = Field(default="v2")
     tokens_used: int = Field(ge=0)
 
 

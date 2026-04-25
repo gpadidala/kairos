@@ -241,12 +241,15 @@ class Pipeline:
 
             # Pre-PR gating: when require_ui_approval is True, enqueue the
             # decision for human review instead of opening a PR immediately.
+            approval_id: str | None = None
             if s.features.require_ui_approval and self._deps.approvals is not None:
-                await self._deps.approvals.enqueue(decision, advice=advice)
+                approval = await self._deps.approvals.enqueue(decision, advice=advice)
+                approval_id = approval.id
                 log.info(
                     "approval_enqueued",
                     workload=decision.workload.uid,
                     action=decision.action.value,
+                    approval_id=approval_id,
                     run_id=run_id,
                 )
             elif self._deps.pr_creator is not None and s.features.enable_pr_creation:
@@ -258,11 +261,28 @@ class Pipeline:
                     await self._deps.audit.record_pr(run_id, pr_result)
 
             if self._deps.notifier is not None and s.features.enable_notifications:
+                # Deep-links for Approve/Reject buttons in the email — only
+                # surface them when an approval exists and a public UI URL
+                # is configured.
+                external = (
+                    str(s.api.external_url).rstrip("/") if s.api.external_url else None
+                )
+                approve_url: str | None = None
+                reject_url: str | None = None
+                review_url: str | None = None
+                if approval_id and external:
+                    approve_url = f"{external}/ui/approvals/{approval_id}/approve"
+                    reject_url = f"{external}/ui/approvals/{approval_id}/reject"
+                    review_url = f"{external}/ui/pending"
                 payload = NotificationPayload(
                     decision=decision,
                     advice=advice,
                     pr_url=str(pr_result.url) if pr_result else None,
                     grafana_url=self._deps.grafana_dashboard_url or None,
+                    approval_id=approval_id,
+                    approve_url=approve_url,
+                    reject_url=reject_url,
+                    review_url=review_url,
                 )
                 notif_results = await self._deps.notifier.fan_out(payload)
                 for r in notif_results:

@@ -94,6 +94,47 @@
       {% endif %}
     </div>
 
+    {% if a.decision.cost %}
+    {% set _c = a.decision.cost %}
+    {% set _is_save = _c.direction == 'down' %}
+    {% set _is_uplift = _c.direction == 'up' %}
+    <div class="mt-4 glass p-4 flex items-center gap-4 flex-wrap">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-xl grid place-items-center ring-1 ring-white/15
+                    {% if _is_save %}bg-gradient-to-br from-emerald-400/40 to-teal-500/40
+                    {% elif _is_uplift %}bg-gradient-to-br from-amber-400/40 to-orange-500/40
+                    {% else %}bg-gradient-to-br from-slate-400/30 to-slate-500/30{% endif %}">
+          <svg viewBox="0 0 24 24" class="w-4 h-4 text-white" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 9c-1.11 0-2.08-.402-2.599-1M12 16v1m6-5a6 6 0 11-12 0 6 6 0 0112 0z"/>
+          </svg>
+        </div>
+        <div>
+          <div class="text-[10px] uppercase tracking-widest text-white/45">Cost impact · est. {{ _c.currency }}/month</div>
+          <div class="text-2xl font-bold tracking-tight
+                      {% if _is_save %}text-emerald-300
+                      {% elif _is_uplift %}text-amber-300
+                      {% else %}text-white/70{% endif %}">
+            {%- if _is_save -%}-${{ "%.0f"|format(_c.delta_monthly|abs) }}/mo
+            {%- elif _is_uplift -%}+${{ "%.0f"|format(_c.delta_monthly) }}/mo
+            {%- else -%}flat{%- endif %}
+          </div>
+        </div>
+      </div>
+      <div class="text-[11px] text-white/55 mono ml-auto">
+        ${{ "%.0f"|format(_c.current_monthly) }}/mo
+        <span class="text-white/30">→</span>
+        ${{ "%.0f"|format(_c.projected_monthly) }}/mo
+        <span class="ml-2 text-white/40">({{ "%.1f"|format(_c.delta_percent) }}%)</span>
+      </div>
+      <div class="text-[10px] text-white/40 mono w-full">
+        rates: ${{ "%.4f"|format(_c.cpu_per_hour) }}/vCPU/h ·
+        ${{ "%.4f"|format(_c.mem_gib_per_hour) }}/GiB/h ·
+        cpu share ${{ "%.0f"|format(_c.cpu_share_monthly) }}/mo ·
+        mem share ${{ "%.0f"|format(_c.mem_share_monthly) }}/mo
+      </div>
+    </div>
+    {% endif %}
+
     {% if a.decision.forecasts %}
     <details class="mt-4">
       <summary class="text-xs text-white/55 inline-flex items-center gap-1 hover:text-white/85">
@@ -111,12 +152,29 @@
     {% endif %}
 
     {% if a.advice %}
+    {% if a.advice.anomaly_note %}
+    <div class="mt-4 glass p-3 flex items-start gap-3 border border-amber-400/30 bg-amber-400/[.05]">
+      <svg viewBox="0 0 24 24" class="w-4 h-4 text-amber-300 mt-0.5 shrink-0" fill="none" stroke="currentColor" stroke-width="2.5">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m0 6.5h.008v.008H12v-.008zm-9.36-1.81a1.5 1.5 0 011.305-2.252h16.11a1.5 1.5 0 011.305 2.252l-8.055 13.96a1.5 1.5 0 01-2.61 0l-8.055-13.96z"/>
+      </svg>
+      <div class="text-sm text-amber-100/90"><strong class="text-amber-200">Anomaly:</strong> {{ a.advice.anomaly_note }}</div>
+    </div>
+    {% endif %}
+    {% if a.advice.cost_commentary %}
+    <div class="mt-3 text-sm text-white/80 leading-relaxed glass p-4">
+      <div class="flex items-center gap-2 mb-1">
+        <span class="text-[10px] uppercase tracking-widest text-white/45">Cost framing</span>
+        <span class="pill {% if a.advice.cost_tag == 'savings' %}pill-success{% elif a.advice.cost_tag == 'uplift' %}pill-warn{% else %}pill-info{% endif %}">{{ a.advice.cost_tag }}</span>
+      </div>
+      {{ a.advice.cost_commentary }}
+    </div>
+    {% endif %}
     <details class="mt-3">
       <summary class="text-xs text-white/55 inline-flex items-center gap-1 hover:text-white/85">
         <svg viewBox="0 0 24 24" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5">
           <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
         </svg>
-        LLM advice ({{ a.advice.provider_used.value }}, {{ a.advice.tokens_used }} tokens)
+        Full LLM advice ({{ a.advice.provider_used.value }}, {{ a.advice.tokens_used }} tokens)
       </summary>
       <div class="mt-3 text-sm text-white/80 space-y-3 border-l-2 border-blue-400/30 pl-4">
         <p><strong class="text-white/95">Why:</strong> {{ a.advice.why }}</p>

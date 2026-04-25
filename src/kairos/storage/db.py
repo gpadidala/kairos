@@ -11,7 +11,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime
 
 import structlog
-from sqlalchemy import JSON, DateTime, Integer, String, Text
+from sqlalchemy import JSON, DateTime, Float, Integer, String, Text
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -163,6 +163,12 @@ class EnvironmentProfileRow(Base):
     github_base_branch: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
     api_external_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
+
+    # Cost rates — when set, override settings.cost. Useful for cheaper Spot
+    # rates in nonprod or premium-SKU rates in prod.
+    cost_cpu_per_hour: Mapped[float | None] = mapped_column(Float, nullable=True)
+    cost_mem_gib_per_hour: Mapped[float | None] = mapped_column(Float, nullable=True)
+    cost_currency: Mapped[str | None] = mapped_column(String(8), nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))

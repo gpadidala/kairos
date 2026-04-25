@@ -148,6 +148,36 @@ class ForecastingSettings(BaseModel):
     resolution_seconds: int = Field(default=300, ge=60, le=3600)
     min_confidence: float = Field(default=0.4, ge=0.0, le=1.0)
     use_prophet_if_available: bool = True
+    # Seasonality controls — Prophet only; statistical fallback uses fixed weekly.
+    weekly_seasonality: bool = True
+    monthly_seasonality: bool = Field(
+        default=True, description="Custom monthly seasonality (e.g. month-end batch jobs)"
+    )
+    yearly_seasonality_min_days: int = Field(
+        default=180,
+        description=(
+            "Auto-enable Prophet yearly seasonality when lookback ≥ this many days. "
+            "Below this Prophet drops yearly to avoid overfit."
+        ),
+    )
+    holiday_calendars: list[str] = Field(
+        default_factory=lambda: ["us"],
+        description="Calendars merged into Prophet holidays. Options: us, in, eu, intl.",
+    )
+
+
+class CostSettings(BaseModel):
+    """Default $/unit rates used when no env profile overrides them.
+
+    Defaults reflect roughly-pooled hyperscaler list prices for a
+    general-purpose on-demand SKU (Azure D-series / AWS m6i / GCP n2). Override
+    per env profile (Spot in nonprod, on-demand in prod, etc.).
+    """
+
+    cpu_per_hour: float = Field(default=0.0400, gt=0, description="$/vCPU/hour")
+    mem_gib_per_hour: float = Field(default=0.0050, gt=0, description="$/GiB/hour")
+    currency: str = Field(default="USD", min_length=1, max_length=8)
+    hours_per_month: float = Field(default=730.0, gt=0)
 
 
 class DecisionSettings(BaseModel):
@@ -242,6 +272,7 @@ class Settings(BaseSettings):
     scheduler: SchedulerSettings = SchedulerSettings()
     forecasting: ForecastingSettings = ForecastingSettings()
     decision: DecisionSettings = DecisionSettings()
+    cost: CostSettings = CostSettings()
     features: FeatureFlags = FeatureFlags()
     api: APISettings = APISettings()
     tracing: TracingSettings = TracingSettings()

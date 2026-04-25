@@ -131,6 +131,44 @@
     </div>
   </div>
 
+  {# ── Cost rates ─────────────────────────────────────────── #}
+  <div class="glass p-6">
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="text-sm font-semibold uppercase tracking-widest text-white/55">Cost rates</h2>
+      <span class="text-[10px] uppercase tracking-widest text-white/45">global default if blank</span>
+    </div>
+    <p class="text-[11px] text-white/55 mb-3">
+      Used to compute the $/month delta on every scaling decision. Override per env so nonprod (e.g. Spot)
+      shows different numbers from prod (on-demand). Leave blank to use the global defaults from
+      <span class="mono">KAIROS_COST__*</span>.
+    </p>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <label class="block">
+        <span class="text-xs text-white/65 mb-1 block">$/vCPU/hour <span class="mono text-[10px] text-white/40">KAIROS_COST__CPU_PER_HOUR</span></span>
+        <input class="glass-input w-full mono" name="cost_cpu_per_hour" type="number" step="0.0001" min="0"
+               value="{{ profile.cost_cpu_per_hour if profile and profile.cost_cpu_per_hour is not none else '' }}"
+               placeholder="0.0400">
+      </label>
+      <label class="block">
+        <span class="text-xs text-white/65 mb-1 block">$/GiB/hour <span class="mono text-[10px] text-white/40">KAIROS_COST__MEM_GIB_PER_HOUR</span></span>
+        <input class="glass-input w-full mono" name="cost_mem_gib_per_hour" type="number" step="0.0001" min="0"
+               value="{{ profile.cost_mem_gib_per_hour if profile and profile.cost_mem_gib_per_hour is not none else '' }}"
+               placeholder="0.0050">
+      </label>
+      <label class="block">
+        <span class="text-xs text-white/65 mb-1 block">Currency <span class="mono text-[10px] text-white/40">KAIROS_COST__CURRENCY</span></span>
+        <input class="glass-input w-full mono" name="cost_currency" maxlength="8"
+               value="{{ profile.cost_currency or '' if profile else '' }}" placeholder="USD">
+      </label>
+    </div>
+    <div class="text-[10px] text-white/40 mt-3">
+      Reference list prices: AKS Standard_D8s_v5 ≈ $0.0400/vCPU·h, $0.0050/GiB·h ·
+      AWS m6i.2xl ≈ $0.0480/vCPU·h, $0.0060/GiB·h ·
+      GCP n2-standard-8 ≈ $0.0420/vCPU·h, $0.0056/GiB·h.
+      Azure Spot / AWS Spot can be 60–90% cheaper.
+    </div>
+  </div>
+
   {# ── API external URL ─────────────────────────────────────── #}
   <div class="glass p-6">
     <h2 class="text-sm font-semibold uppercase tracking-widest text-white/55 mb-4">Webhooks (Kairos public URL)</h2>

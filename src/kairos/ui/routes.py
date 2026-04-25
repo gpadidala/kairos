@@ -229,6 +229,16 @@ def build_ui_router() -> APIRouter:  # noqa: PLR0915 — single factory register
             await _ctx(deps, profile=profile, mode="edit"),
         )
 
+    def _opt_float(raw: str) -> float | None:
+        s = raw.strip()
+        if not s:
+            return None
+        try:
+            v = float(s)
+        except ValueError:
+            return None
+        return v if v > 0 else None
+
     @router.post("/ui/admin/envs", include_in_schema=False)
     async def ui_admin_env_create(
         request: Request,
@@ -244,6 +254,9 @@ def build_ui_router() -> APIRouter:  # noqa: PLR0915 — single factory register
         github_token: Annotated[str, Form()] = "",
         github_base_branch: Annotated[str, Form()] = "",
         api_external_url: Annotated[str, Form()] = "",
+        cost_cpu_per_hour: Annotated[str, Form()] = "",
+        cost_mem_gib_per_hour: Annotated[str, Form()] = "",
+        cost_currency: Annotated[str, Form()] = "",
         activate: Annotated[str, Form()] = "",
     ) -> RedirectResponse:
         env_profiles_store = getattr(request.app.state, "env_profiles", None)
@@ -262,6 +275,9 @@ def build_ui_router() -> APIRouter:  # noqa: PLR0915 — single factory register
             github_token=github_token.strip() or None,
             github_base_branch=github_base_branch.strip() or None,
             api_external_url=api_external_url.strip() or None,
+            cost_cpu_per_hour=_opt_float(cost_cpu_per_hour),
+            cost_mem_gib_per_hour=_opt_float(cost_mem_gib_per_hour),
+            cost_currency=cost_currency.strip().upper() or None,
         )
         if activate == "on":
             await env_profiles_store.activate(profile.id)
@@ -286,6 +302,9 @@ def build_ui_router() -> APIRouter:  # noqa: PLR0915 — single factory register
         github_token: Annotated[str, Form()] = "",
         github_base_branch: Annotated[str, Form()] = "",
         api_external_url: Annotated[str, Form()] = "",
+        cost_cpu_per_hour: Annotated[str, Form()] = "",
+        cost_mem_gib_per_hour: Annotated[str, Form()] = "",
+        cost_currency: Annotated[str, Form()] = "",
     ) -> RedirectResponse:
         env_profiles_store = getattr(request.app.state, "env_profiles", None)
         if env_profiles_store is None:
@@ -304,6 +323,9 @@ def build_ui_router() -> APIRouter:  # noqa: PLR0915 — single factory register
             github_token=github_token.strip() or None,
             github_base_branch=github_base_branch.strip() or None,
             api_external_url=api_external_url.strip() or None,
+            cost_cpu_per_hour=_opt_float(cost_cpu_per_hour),
+            cost_mem_gib_per_hour=_opt_float(cost_mem_gib_per_hour),
+            cost_currency=cost_currency.strip().upper() or None,
         )
         if result is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "profile not found")

@@ -17,6 +17,12 @@ class NotificationPayload:
     advice: LLMAdvice | None
     pr_url: str | None = None
     grafana_url: str | None = None
+    # Approval deep-links — when an approval row exists, surface Approve/Reject
+    # buttons in email so the reviewer can act without logging into the UI.
+    approval_id: str | None = None
+    approve_url: str | None = None
+    reject_url: str | None = None
+    review_url: str | None = None
 
 
 class Notifier(ABC):

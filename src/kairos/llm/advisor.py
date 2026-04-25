@@ -20,7 +20,7 @@ from kairos.llm.router import LLMRouter
 
 log = structlog.get_logger(__name__)
 
-PROMPT_VERSION = "v1"
+PROMPT_VERSION = "v2"
 _PROMPT_DIR = Path(__file__).parent / "prompts"
 _env = Environment(
     loader=FileSystemLoader(str(_PROMPT_DIR)),
@@ -58,6 +58,9 @@ class _LLMAdviceOutput(BaseModel):
     risks_of_inaction: str = Field(min_length=1)
     engineer_steps: list[str] = Field(min_length=1)
     validation_steps: list[str] = Field(min_length=1)
+    cost_commentary: str = Field(default="")
+    cost_tag: str = Field(default="steady")
+    anomaly_note: str | None = Field(default=None)
 
 
 def _extract_json(content: str) -> dict[str, Any]:
@@ -78,6 +81,25 @@ def _extract_json(content: str) -> dict[str, Any]:
 
 def _canned_advice(decision: ScalingDecision) -> LLMAdvice:
     """Deterministic fallback when every provider fails."""
+    cost = decision.cost
+    if cost is None or cost.direction == "flat":
+        cost_commentary = "No measurable cost impact — this action keeps the workload at its current shape."
+        cost_tag = "steady"
+    elif cost.direction == "down":
+        cost_commentary = (
+            f"Estimated savings of ${abs(cost.delta_monthly):.0f}/{cost.currency}/mo "
+            f"({abs(cost.delta_percent):.1f}%) by reclaiming idle capacity. "
+            "These savings recur every month the workload stays at the proposed shape."
+        )
+        cost_tag = "savings"
+    else:
+        cost_commentary = (
+            f"Adds ${cost.delta_monthly:.0f}/{cost.currency}/mo "
+            f"({cost.delta_percent:.1f}%) to keep the workload below its headroom threshold "
+            "during the predicted peak window. Recurring monthly until requirements change."
+        )
+        cost_tag = "uplift"
+
     return LLMAdvice(
         why=(
             f"Proposed {decision.action.value} for {decision.workload.uid} "
@@ -101,6 +123,9 @@ def _canned_advice(decision: ScalingDecision) -> LLMAdvice:
             "Verify p95 request latency stays within SLO for 30 minutes.",
             "Confirm error rate stays under 0.1% for 30 minutes.",
         ],
+        cost_commentary=cost_commentary,
+        cost_tag=cost_tag,  # type: ignore[arg-type]
+        anomaly_note=None,
         provider_used=LLMProviderName.CANNED,
         prompt_version=PROMPT_VERSION,
         tokens_used=0,
@@ -144,12 +169,25 @@ class LLMAdvisor:
                 )
                 obj = _extract_json(response.content)
                 parsed = _LLMAdviceOutput.model_validate(obj)
+                # Normalize cost_tag: LLMs occasionally return synonyms.
+                tag = parsed.cost_tag.strip().lower()
+                if tag not in ("savings", "uplift", "steady"):
+                    tag = (
+                        "savings"
+                        if "sav" in tag or "down" in tag
+                        else "uplift"
+                        if "up" in tag or "increase" in tag
+                        else "steady"
+                    )
                 return LLMAdvice(
                     why=parsed.why,
                     horizontal_vs_vertical=parsed.horizontal_vs_vertical,
                     risks_of_inaction=parsed.risks_of_inaction,
                     engineer_steps=parsed.engineer_steps,
                     validation_steps=parsed.validation_steps,
+                    cost_commentary=parsed.cost_commentary,
+                    cost_tag=tag,  # type: ignore[arg-type]
+                    anomaly_note=parsed.anomaly_note,
                     provider_used=response.provider,
                     prompt_version=PROMPT_VERSION,
                     tokens_used=response.prompt_tokens + response.completion_tokens,

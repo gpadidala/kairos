@@ -115,7 +115,7 @@ def test_email_returns_subject_html_plain() -> None:
     subject, html, plain = build_email(p)
     assert "KAIROS" in subject and "api" in subject
     assert "<html>" in html.lower()
-    assert "<code>" in html
+    assert "<code" in html  # styled <code> tag wrapping the workload uid
     assert "KAIROS:" in plain
 
 

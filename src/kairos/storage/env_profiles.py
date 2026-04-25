@@ -17,6 +17,7 @@ from sqlalchemy import select, update
 
 from kairos.config.settings import (
     APISettings,
+    CostSettings,
     GitHubSettings,
     GrafanaSettings,
     MimirSettings,
@@ -49,6 +50,10 @@ class EnvironmentProfile(BaseModel):
 
     api_external_url: str | None = None
 
+    cost_cpu_per_hour: float | None = None
+    cost_mem_gib_per_hour: float | None = None
+    cost_currency: str | None = None
+
     created_at: datetime
     updated_at: datetime
 
@@ -69,6 +74,9 @@ def _row_to_model(row: EnvironmentProfileRow) -> EnvironmentProfile:
         github_token=row.github_token,
         github_base_branch=row.github_base_branch,
         api_external_url=row.api_external_url,
+        cost_cpu_per_hour=row.cost_cpu_per_hour,
+        cost_mem_gib_per_hour=row.cost_mem_gib_per_hour,
+        cost_currency=row.cost_currency,
         created_at=row.created_at,
         updated_at=row.updated_at,
     )
@@ -114,6 +122,9 @@ class EnvironmentProfileStore:
         github_token: str | None = None,
         github_base_branch: str | None = None,
         api_external_url: str | None = None,
+        cost_cpu_per_hour: float | None = None,
+        cost_mem_gib_per_hour: float | None = None,
+        cost_currency: str | None = None,
     ) -> EnvironmentProfile:
         now = datetime.now(UTC)
         pid = str(uuid.uuid4())
@@ -133,6 +144,9 @@ class EnvironmentProfileStore:
                 github_token=github_token,
                 github_base_branch=github_base_branch,
                 api_external_url=api_external_url,
+                cost_cpu_per_hour=cost_cpu_per_hour,
+                cost_mem_gib_per_hour=cost_mem_gib_per_hour,
+                cost_currency=cost_currency,
                 created_at=now,
                 updated_at=now,
             )
@@ -240,7 +254,9 @@ class EnvironmentProfileStore:
         return True
 
 
-def apply_active_profile(base: Settings, profile: EnvironmentProfile | None) -> Settings:
+def apply_active_profile(  # noqa: PLR0912 — flat per-section merge is clearer than refactor
+    base: Settings, profile: EnvironmentProfile | None
+) -> Settings:
     """Return a Settings copy with the active profile's non-empty fields merged in.
 
     Pydantic v2 model_copy(update=...) clones the Settings without re-running env-var
@@ -283,11 +299,21 @@ def apply_active_profile(base: Settings, profile: EnvironmentProfile | None) -> 
         api_updates["external_url"] = HttpUrl(profile.api_external_url)
     api = base.api.model_copy(update=api_updates) if api_updates else base.api
 
+    cost_updates: dict[str, object] = {}
+    if profile.cost_cpu_per_hour is not None and profile.cost_cpu_per_hour > 0:
+        cost_updates["cpu_per_hour"] = profile.cost_cpu_per_hour
+    if profile.cost_mem_gib_per_hour is not None and profile.cost_mem_gib_per_hour > 0:
+        cost_updates["mem_gib_per_hour"] = profile.cost_mem_gib_per_hour
+    if profile.cost_currency:
+        cost_updates["currency"] = profile.cost_currency
+    cost = base.cost.model_copy(update=cost_updates) if cost_updates else base.cost
+
     # Confirm types for the cast — model_copy preserves model type
     assert isinstance(grafana, GrafanaSettings)
     assert isinstance(mimir, MimirSettings)
     assert isinstance(github, GitHubSettings)
     assert isinstance(api, APISettings)
+    assert isinstance(cost, CostSettings)
 
     return base.model_copy(
         update={
@@ -295,5 +321,6 @@ def apply_active_profile(base: Settings, profile: EnvironmentProfile | None) -> 
             "mimir": mimir,
             "github": github,
             "api": api,
+            "cost": cost,
         }
     )

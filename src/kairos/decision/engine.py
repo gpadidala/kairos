@@ -8,6 +8,7 @@ import uuid
 import structlog
 
 from kairos.config.settings import DecisionSettings, FeatureFlags
+from kairos.cost.estimator import CostRates, estimate_decision_cost
 from kairos.decision.policies import requires_human_approval
 from kairos.decision.rules import (
     DecisionInput,
@@ -45,9 +46,15 @@ class DecisionEngine:
       8. Default NOOP fallthrough
     """
 
-    def __init__(self, settings: DecisionSettings, features: FeatureFlags) -> None:
+    def __init__(
+        self,
+        settings: DecisionSettings,
+        features: FeatureFlags,
+        cost_rates: CostRates | None = None,
+    ) -> None:
         self._settings = settings
         self._features = features
+        self._cost_rates = cost_rates or CostRates()
 
     def decide(self, inp: DecisionInput, *, correlation_id: str | None = None) -> ScalingDecision:
         cid = correlation_id or str(uuid.uuid4())
@@ -111,6 +118,11 @@ class DecisionEngine:
             generated_at=inp.now,
             requires_approval=(action == ScalingAction.HUMAN_APPROVAL_REQUIRED),
         )
+        # Attach deterministic cost impact so cards / emails / history all carry it.
+        try:
+            dec.cost = estimate_decision_cost(dec, self._cost_rates)
+        except Exception as exc:  # pragma: no cover — estimator is pure
+            log.warning("cost_estimate_failed", workload=inp.workload.uid, error=str(exc))
         DECISIONS_TOTAL.labels(action=action.value, severity=result.severity.value).inc()
         log.info(
             "decision_emitted",
