@@ -38,7 +38,8 @@ RUN apt-get update \
  && rm -rf /var/lib/apt/lists/* \
  && groupadd --system --gid 10001 pcap \
  && useradd  --system --uid 10001 --gid pcap --home-dir /app --shell /sbin/nologin pcap \
- && mkdir -p /app && chown -R pcap:pcap /app
+ && mkdir -p /app /data \
+ && chown -R pcap:pcap /app /data
 
 WORKDIR /app
 COPY --from=builder --chown=pcap:pcap /build/.venv /app/.venv

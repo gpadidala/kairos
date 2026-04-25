@@ -173,6 +173,19 @@ class APISettings(BaseModel):
     )
     cors_origins: list[str] = Field(default_factory=list)
 
+    @field_validator("token_sha256_list", "cors_origins", mode="before")
+    @classmethod
+    def _blank_or_csv(cls, v: object) -> object:
+        # Env-driven blanks ("" or whitespace) → empty list, else parse CSV.
+        if v is None:
+            return []
+        if isinstance(v, str):
+            stripped = v.strip()
+            if not stripped:
+                return []
+            return [item.strip() for item in stripped.split(",") if item.strip()]
+        return v
+
 
 class TracingSettings(BaseModel):
     enabled: bool = True

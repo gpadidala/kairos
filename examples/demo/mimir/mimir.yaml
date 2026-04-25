@@ -26,7 +26,7 @@ ruler_storage:
 alertmanager_storage:
   backend: filesystem
   filesystem:
-    dir: /data/mimir/alertmanager
+    dir: /data/am-storage
 
 server:
   http_listen_port: 9009

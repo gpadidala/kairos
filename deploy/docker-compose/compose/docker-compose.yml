@@ -44,11 +44,10 @@ services:
       - mimir-data:/data
     ports:
       - "${MIMIR_PORT:-9009}:9009"
-    healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:9009/ready"]
-      interval: 5s
-      timeout: 3s
-      retries: 30
+    # grafana/mimir is distroless-static — no wget/curl/sh available — so we
+    # can't run an in-container healthcheck. Dependents use service_started
+    # and retry via their own clients (PCAP has a circuit breaker, Grafana
+    # retries datasource connectivity).
     restart: unless-stopped
     deploy:
       resources:
@@ -82,7 +81,7 @@ services:
       retries: 30
     depends_on:
       mimir:
-        condition: service_healthy
+        condition: service_started
     restart: unless-stopped
     deploy:
       resources:
@@ -120,7 +119,8 @@ services:
       PCAP_SCHEDULER__INTERVAL_MINUTES: ${PCAP_SCHEDULER_INTERVAL_MINUTES:-30}
       # ── Forecasting ──────────────────────────────────────────────
       PCAP_FORECASTING__HORIZON_HOURS: ${PCAP_FORECASTING_HORIZON_HOURS:-48}
-      PCAP_FORECASTING__LOOKBACK_DAYS: ${PCAP_FORECASTING_LOOKBACK_DAYS:-14}
+      PCAP_FORECASTING__LOOKBACK_DAYS: ${PCAP_FORECASTING_LOOKBACK_DAYS:-1}
+      PCAP_FORECASTING__RESOLUTION_SECONDS: ${PCAP_FORECASTING_RESOLUTION_SECONDS:-60}
       PCAP_FORECASTING__USE_PROPHET_IF_AVAILABLE: ${PCAP_FORECASTING_USE_PROPHET_IF_AVAILABLE:-false}
       # ── Mimir ────────────────────────────────────────────────────
       PCAP_MIMIR__URL: ${PCAP_MIMIR_URL:-http://mimir:9009}
@@ -166,7 +166,7 @@ services:
       redis:
         condition: service_healthy
       mimir:
-        condition: service_healthy
+        condition: service_started
     restart: unless-stopped
     deploy:
       resources:
@@ -196,7 +196,7 @@ services:
       PIP_INDEX_URL: ${PIP_INDEX_URL:-https://pypi.org/simple}
     depends_on:
       mimir:
-        condition: service_healthy
+        condition: service_started
     restart: unless-stopped
     networks: [pcap-net]
 
