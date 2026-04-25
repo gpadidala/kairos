@@ -21,14 +21,87 @@
 <div class="mb-8">
   <h1 class="text-3xl font-bold tracking-tight mb-1">Admin</h1>
   <p class="text-sm text-white/65 max-w-3xl">
-    Live configuration and connection status. Settings are loaded from environment variables and config
-    files at process startup — this page is the read-only mirror plus a connection tester. To change a value,
-    set its env var and restart the container.
+    Connection setup and live configuration. Create one <em>environment profile</em> per environment
+    (dev / staging / prod / DR) and activate it to hot-reload the Grafana + GitHub clients without a
+    restart. Empty profile fields fall through to the env-var defaults.
   </p>
 </div>
 
+{# ── Environment profiles ───────────────────────────────────────── #}
+<div class="flex items-center justify-between mb-4">
+  <h2 class="text-sm font-semibold uppercase tracking-widest text-white/55">Environment profiles</h2>
+  <a href="/ui/admin/envs/new" class="btn-glass btn-glass-sm btn-glass-success">
+    <svg viewBox="0 0 24 24" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 5v14m-7-7h14"/></svg>
+    New profile
+  </a>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mb-12">
+  {% for p in profiles %}
+  <div class="glass p-5 {% if p.is_active %}ring-2 ring-emerald-400/50{% endif %}">
+    <div class="flex items-start justify-between mb-2">
+      <div>
+        <div class="flex items-center gap-2">
+          <h3 class="text-base font-semibold tracking-tight mono">{{ p.name }}</h3>
+          {% if p.is_active %}
+            <span class="pill pill-success"><span class="w-1.5 h-1.5 rounded-full bg-current opacity-70"></span>active</span>
+          {% endif %}
+        </div>
+        {% if p.description %}<div class="text-xs text-white/55 mt-0.5">{{ p.description }}</div>{% endif %}
+      </div>
+    </div>
+    <dl class="text-[11px] space-y-0.5 mt-3 mb-4 mono">
+      <div class="flex justify-between gap-2 truncate">
+        <dt class="text-white/45 shrink-0">Grafana</dt>
+        <dd class="text-white/75 truncate">{{ p.grafana_external_url or p.grafana_url or '—' }}</dd>
+      </div>
+      <div class="flex justify-between gap-2 truncate">
+        <dt class="text-white/45 shrink-0">Mimir</dt>
+        <dd class="text-white/75 truncate">{{ p.mimir_url or '—' }}</dd>
+      </div>
+      <div class="flex justify-between gap-2 truncate">
+        <dt class="text-white/45 shrink-0">GitHub</dt>
+        <dd class="text-white/75 truncate">{{ p.github_repo or '—' }}</dd>
+      </div>
+      <div class="flex justify-between gap-2 truncate">
+        <dt class="text-white/45 shrink-0">API URL</dt>
+        <dd class="text-white/75 truncate">{{ p.api_external_url or '—' }}</dd>
+      </div>
+    </dl>
+    <div class="flex items-center justify-between gap-2">
+      <a href="/ui/admin/envs/{{ p.id }}" class="btn-glass btn-glass-sm">Edit</a>
+      <div class="flex items-center gap-1.5">
+        {% if p.is_active %}
+        <form action="/ui/admin/envs/{{ p.id }}/deactivate" method="post">
+          <button class="btn-glass btn-glass-sm">Deactivate</button>
+        </form>
+        {% else %}
+        <form action="/ui/admin/envs/{{ p.id }}/activate" method="post">
+          <button class="btn-glass btn-glass-sm btn-glass-success">Activate</button>
+        </form>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  {% else %}
+  <div class="glass p-6 md:col-span-2 lg:col-span-3 text-center text-sm text-white/55">
+    <div class="mb-2">No environment profiles yet — Kairos is using env-var defaults.</div>
+    <a href="/ui/admin/envs/new" class="btn-glass btn-glass-sm btn-glass-success">
+      <svg viewBox="0 0 24 24" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 5v14m-7-7h14"/></svg>
+      Create your first profile
+    </a>
+  </div>
+  {% endfor %}
+</div>
+
 {# ── Connections ────────────────────────────────────────────────── #}
-<h2 class="text-sm font-semibold uppercase tracking-widest text-white/55 mb-4">Connections</h2>
+<div class="flex items-center justify-between mb-4">
+  <h2 class="text-sm font-semibold uppercase tracking-widest text-white/55">Connections (active config)</h2>
+  {% if active_profile %}
+    <span class="text-xs text-white/55">resolved from profile <span class="mono text-emerald-300">{{ active_profile.name }}</span></span>
+  {% else %}
+    <span class="text-xs text-white/55">resolved from env-var defaults</span>
+  {% endif %}
+</div>
 <div class="glass overflow-hidden mb-12">
   <table class="glass-table">
     <thead><tr>

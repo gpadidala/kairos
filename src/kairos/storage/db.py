@@ -134,6 +134,40 @@ class AlertRow(Base):
     raw_json: Mapped[dict[str, object]] = mapped_column(JSON)
 
 
+class EnvironmentProfileRow(Base):
+    """Operator-managed environment profile.
+
+    A profile is a named bundle of connection overrides (Grafana / Mimir /
+    GitHub / API external URL). At most one profile is `is_active=True` at a
+    time. The active profile is merged on top of env-var Settings to produce
+    the effective runtime configuration.
+    """
+
+    __tablename__ = "environment_profiles"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    name: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    is_active: Mapped[int] = mapped_column(Integer, default=0, index=True)
+
+    grafana_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    grafana_external_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    grafana_token: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    mimir_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    mimir_org_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    mimir_bearer: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    github_repo: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    github_token: Mapped[str | None] = mapped_column(Text, nullable=True)
+    github_base_branch: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
+    api_external_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
 class Database:
     """Owns the async engine + sessionmaker."""
 

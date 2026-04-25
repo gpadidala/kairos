@@ -40,36 +40,12 @@ async def require_auth(request: Request, credentials: BearerDep) -> None:
     _verify_token(settings, token)
 
 
-@asynccontextmanager
-async def _lifespan(app: FastAPI) -> AsyncIterator[None]:  # noqa: PLR0915
-    settings: Settings = app.state.settings
-    configure_logging(settings)
-    configure_tracing(settings)
+async def _build_runtime_clients(app: FastAPI, settings: Settings) -> None:
+    """(Re)build clients that depend on Settings overrides — Grafana + PR creator.
 
-    # Audit DB + approvals: best-effort bootstrap. Failures log-and-skip so
-    # the API stays up even when the DB isn't reachable.
-    app.state.db = None
-    app.state.sql_audit = None
-    app.state.approvals = None
-    try:
-        from kairos.storage.approvals import ApprovalStore  # noqa: PLC0415
-        from kairos.storage.db import Database  # noqa: PLC0415
-        from kairos.storage.sql_audit_store import SQLAuditStore  # noqa: PLC0415
-
-        db = Database.from_settings(settings.audit_db)
-        await db.create_all()
-        app.state.db = db
-        app.state.sql_audit = SQLAuditStore(db)
-        app.state.approvals = ApprovalStore(
-            db, pending_ttl_hours=settings.audit_db.pending_ttl_hours
-        )
-        # Incoming-alerts store (Grafana webhook receiver target)
-        from kairos.storage.alerts import IncomingAlertStore  # noqa: PLC0415
-
-        app.state.incoming_alerts = IncomingAlertStore(db)
-    except Exception as exc:
-        log.warning("audit_db_bootstrap_failed", error=str(exc))
-
+    Called from lifespan on startup, and from the admin route when the operator
+    activates a different environment profile.
+    """
     # Grafana client — optional; used by /ui/alerts and /ui/keda panels.
     app.state.grafana_client = None
     try:
@@ -124,6 +100,69 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:  # noqa: PLR0915
             app.state.pr_creator = DemoPRCreator()
     except Exception as exc:
         log.warning("pr_creator_bootstrap_failed", error=str(exc))
+
+
+async def reload_active_environment(app: FastAPI) -> None:
+    """Re-resolve the active env profile and rebuild dependent clients.
+
+    Called on startup (in lifespan) and after an admin activate/update/delete.
+    Updates `app.state.settings` to be the merged effective config; keeps the
+    original env-var settings on `app.state.settings_base`.
+    """
+    base: Settings = app.state.settings_base
+    profile = None
+    profiles_store = getattr(app.state, "env_profiles", None)
+    if profiles_store is not None:
+        try:
+            profile = await profiles_store.get_active()
+        except Exception as exc:
+            log.warning("env_profile_load_failed", error=str(exc))
+
+    from kairos.storage.env_profiles import apply_active_profile  # noqa: PLC0415
+
+    effective = apply_active_profile(base, profile)
+    app.state.settings = effective
+    app.state.active_env_profile = profile
+    await _build_runtime_clients(app, effective)
+
+
+@asynccontextmanager
+async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
+    settings: Settings = app.state.settings
+    app.state.settings_base = settings
+    configure_logging(settings)
+    configure_tracing(settings)
+
+    # Audit DB + approvals: best-effort bootstrap. Failures log-and-skip so
+    # the API stays up even when the DB isn't reachable.
+    app.state.db = None
+    app.state.sql_audit = None
+    app.state.approvals = None
+    app.state.env_profiles = None
+    try:
+        from kairos.storage.approvals import ApprovalStore  # noqa: PLC0415
+        from kairos.storage.db import Database  # noqa: PLC0415
+        from kairos.storage.env_profiles import EnvironmentProfileStore  # noqa: PLC0415
+        from kairos.storage.sql_audit_store import SQLAuditStore  # noqa: PLC0415
+
+        db = Database.from_settings(settings.audit_db)
+        await db.create_all()
+        app.state.db = db
+        app.state.sql_audit = SQLAuditStore(db)
+        app.state.approvals = ApprovalStore(
+            db, pending_ttl_hours=settings.audit_db.pending_ttl_hours
+        )
+        # Incoming-alerts store (Grafana webhook receiver target)
+        from kairos.storage.alerts import IncomingAlertStore  # noqa: PLC0415
+
+        app.state.incoming_alerts = IncomingAlertStore(db)
+        app.state.env_profiles = EnvironmentProfileStore(db)
+    except Exception as exc:
+        log.warning("audit_db_bootstrap_failed", error=str(exc))
+
+    # Resolve active env profile + build runtime clients (Grafana, PRCreator).
+    await reload_active_environment(app)
+    settings = app.state.settings  # may now reflect the active profile
 
     log.info(
         "kairos_starting",

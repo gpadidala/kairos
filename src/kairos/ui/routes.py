@@ -177,6 +177,11 @@ def build_ui_router() -> APIRouter:  # noqa: PLR0915 — single factory register
         external = str(s.api.external_url).rstrip("/") if s.api.external_url else ""
         alert_webhook_url = f"{external}/api/v1/alerts/webhook" if external else "(set KAIROS_API__EXTERNAL_URL to enable)"
         github_webhook_url = f"{external}/api/v1/github/webhook" if external else "(set KAIROS_API__EXTERNAL_URL to enable)"
+        env_profiles_store = getattr(request.app.state, "env_profiles", None)
+        profiles: list[Any] = []
+        active_profile: Any = getattr(request.app.state, "active_env_profile", None)
+        if env_profiles_store is not None:
+            profiles = await env_profiles_store.list()
         return templates.TemplateResponse(
             request,
             "admin.html.j2",
@@ -193,8 +198,158 @@ def build_ui_router() -> APIRouter:  # noqa: PLR0915 — single factory register
                 teams_enabled=s.teams.webhook_url is not None,
                 slack_enabled=s.slack.webhook_url is not None or s.slack.bot_token is not None,
                 smtp_enabled=bool(s.smtp.host and s.smtp.to_addrs),
+                profiles=profiles,
+                active_profile=active_profile,
             ),
         )
+
+    @router.get("/ui/admin/envs/new", response_class=HTMLResponse, include_in_schema=False)
+    async def ui_admin_env_new(request: Request, deps: dict[str, Any] = DepsDep) -> HTMLResponse:
+        return templates.TemplateResponse(
+            request,
+            "admin_env_form.html.j2",
+            await _ctx(deps, profile=None, mode="new"),
+        )
+
+    @router.get(
+        "/ui/admin/envs/{profile_id}", response_class=HTMLResponse, include_in_schema=False
+    )
+    async def ui_admin_env_edit(
+        profile_id: str, request: Request, deps: dict[str, Any] = DepsDep
+    ) -> HTMLResponse:
+        env_profiles_store = getattr(request.app.state, "env_profiles", None)
+        if env_profiles_store is None:
+            raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "env profiles disabled")
+        profile = await env_profiles_store.get(profile_id)
+        if profile is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "profile not found")
+        return templates.TemplateResponse(
+            request,
+            "admin_env_form.html.j2",
+            await _ctx(deps, profile=profile, mode="edit"),
+        )
+
+    @router.post("/ui/admin/envs", include_in_schema=False)
+    async def ui_admin_env_create(
+        request: Request,
+        name: Annotated[str, Form()],
+        description: Annotated[str, Form()] = "",
+        grafana_url: Annotated[str, Form()] = "",
+        grafana_external_url: Annotated[str, Form()] = "",
+        grafana_token: Annotated[str, Form()] = "",
+        mimir_url: Annotated[str, Form()] = "",
+        mimir_org_id: Annotated[str, Form()] = "",
+        mimir_bearer: Annotated[str, Form()] = "",
+        github_repo: Annotated[str, Form()] = "",
+        github_token: Annotated[str, Form()] = "",
+        github_base_branch: Annotated[str, Form()] = "",
+        api_external_url: Annotated[str, Form()] = "",
+        activate: Annotated[str, Form()] = "",
+    ) -> RedirectResponse:
+        env_profiles_store = getattr(request.app.state, "env_profiles", None)
+        if env_profiles_store is None:
+            raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "env profiles disabled")
+        profile = await env_profiles_store.create(
+            name=name.strip(),
+            description=description.strip() or None,
+            grafana_url=grafana_url.strip() or None,
+            grafana_external_url=grafana_external_url.strip() or None,
+            grafana_token=grafana_token.strip() or None,
+            mimir_url=mimir_url.strip() or None,
+            mimir_org_id=mimir_org_id.strip() or None,
+            mimir_bearer=mimir_bearer.strip() or None,
+            github_repo=github_repo.strip() or None,
+            github_token=github_token.strip() or None,
+            github_base_branch=github_base_branch.strip() or None,
+            api_external_url=api_external_url.strip() or None,
+        )
+        if activate == "on":
+            await env_profiles_store.activate(profile.id)
+            from kairos.api.app import reload_active_environment  # noqa: PLC0415
+
+            await reload_active_environment(request.app)
+        return RedirectResponse("/ui/admin", status_code=status.HTTP_302_FOUND)
+
+    @router.post("/ui/admin/envs/{profile_id}", include_in_schema=False)
+    async def ui_admin_env_update(
+        profile_id: str,
+        request: Request,
+        name: Annotated[str, Form()],
+        description: Annotated[str, Form()] = "",
+        grafana_url: Annotated[str, Form()] = "",
+        grafana_external_url: Annotated[str, Form()] = "",
+        grafana_token: Annotated[str, Form()] = "",
+        mimir_url: Annotated[str, Form()] = "",
+        mimir_org_id: Annotated[str, Form()] = "",
+        mimir_bearer: Annotated[str, Form()] = "",
+        github_repo: Annotated[str, Form()] = "",
+        github_token: Annotated[str, Form()] = "",
+        github_base_branch: Annotated[str, Form()] = "",
+        api_external_url: Annotated[str, Form()] = "",
+    ) -> RedirectResponse:
+        env_profiles_store = getattr(request.app.state, "env_profiles", None)
+        if env_profiles_store is None:
+            raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "env profiles disabled")
+        result = await env_profiles_store.update(
+            profile_id,
+            name=name.strip(),
+            description=description.strip() or None,
+            grafana_url=grafana_url.strip() or None,
+            grafana_external_url=grafana_external_url.strip() or None,
+            grafana_token=grafana_token.strip() or None,
+            mimir_url=mimir_url.strip() or None,
+            mimir_org_id=mimir_org_id.strip() or None,
+            mimir_bearer=mimir_bearer.strip() or None,
+            github_repo=github_repo.strip() or None,
+            github_token=github_token.strip() or None,
+            github_base_branch=github_base_branch.strip() or None,
+            api_external_url=api_external_url.strip() or None,
+        )
+        if result is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "profile not found")
+        if result.is_active:
+            from kairos.api.app import reload_active_environment  # noqa: PLC0415
+
+            await reload_active_environment(request.app)
+        return RedirectResponse("/ui/admin", status_code=status.HTTP_302_FOUND)
+
+    @router.post("/ui/admin/envs/{profile_id}/activate", include_in_schema=False)
+    async def ui_admin_env_activate(profile_id: str, request: Request) -> RedirectResponse:
+        env_profiles_store = getattr(request.app.state, "env_profiles", None)
+        if env_profiles_store is None:
+            raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "env profiles disabled")
+        result = await env_profiles_store.activate(profile_id)
+        if result is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "profile not found")
+        from kairos.api.app import reload_active_environment  # noqa: PLC0415
+
+        await reload_active_environment(request.app)
+        return RedirectResponse("/ui/admin", status_code=status.HTTP_302_FOUND)
+
+    @router.post("/ui/admin/envs/{profile_id}/deactivate", include_in_schema=False)
+    async def ui_admin_env_deactivate(profile_id: str, request: Request) -> RedirectResponse:
+        env_profiles_store = getattr(request.app.state, "env_profiles", None)
+        if env_profiles_store is None:
+            raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "env profiles disabled")
+        await env_profiles_store.deactivate_all()
+        from kairos.api.app import reload_active_environment  # noqa: PLC0415
+
+        await reload_active_environment(request.app)
+        return RedirectResponse("/ui/admin", status_code=status.HTTP_302_FOUND)
+
+    @router.post("/ui/admin/envs/{profile_id}/delete", include_in_schema=False)
+    async def ui_admin_env_delete(profile_id: str, request: Request) -> RedirectResponse:
+        env_profiles_store = getattr(request.app.state, "env_profiles", None)
+        if env_profiles_store is None:
+            raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "env profiles disabled")
+        # If we deleted the active one, fall back to env-var settings
+        active = await env_profiles_store.get_active()
+        await env_profiles_store.delete(profile_id)
+        if active and active.id == profile_id:
+            from kairos.api.app import reload_active_environment  # noqa: PLC0415
+
+            await reload_active_environment(request.app)
+        return RedirectResponse("/ui/admin", status_code=status.HTTP_302_FOUND)
 
     @router.get("/ui/dashboard", response_class=HTMLResponse, include_in_schema=False)
     async def ui_dashboard(request: Request, deps: dict[str, Any] = DepsDep) -> HTMLResponse:

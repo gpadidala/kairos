@@ -1,0 +1,163 @@
+{% extends "base.html.j2" %}
+{% set active = "admin" %}
+{% block title %}{% if mode == 'new' %}New environment{% else %}Edit · {{ profile.name }}{% endif %}{% endblock %}
+{% block content %}
+
+{% set is_new = (mode == 'new') %}
+{% set form_action = '/ui/admin/envs' if is_new else '/ui/admin/envs/' ~ profile.id %}
+
+<div class="mb-6 flex items-center justify-between gap-4">
+  <div>
+    <a href="/ui/admin" class="text-xs text-blue-300/80 hover:text-blue-200 underline-offset-4 hover:underline">← Back to Admin</a>
+    <h1 class="text-3xl font-bold tracking-tight mt-1">
+      {% if is_new %}New environment profile{% else %}Edit · <span class="mono">{{ profile.name }}</span>{% endif %}
+    </h1>
+    <p class="text-sm text-white/65 mt-1 max-w-2xl">
+      A profile bundles connection overrides for one environment (dev / staging / prod / DR).
+      Activating a profile hot-reloads the Grafana + GitHub clients with the merged settings — no restart required.
+      Empty fields fall through to the env-var defaults.
+    </p>
+  </div>
+  {% if not is_new %}
+  <div class="flex flex-col items-end gap-2">
+    {% if profile.is_active %}
+      <span class="pill pill-success"><span class="w-1.5 h-1.5 rounded-full bg-current opacity-70"></span>active</span>
+    {% else %}
+      <form action="/ui/admin/envs/{{ profile.id }}/activate" method="post">
+        <button class="btn-glass btn-glass-sm btn-glass-success">Activate</button>
+      </form>
+    {% endif %}
+    <form action="/ui/admin/envs/{{ profile.id }}/delete" method="post" onsubmit="return confirm('Delete profile {{ profile.name }}?')">
+      <button class="btn-glass btn-glass-sm btn-glass-danger">Delete</button>
+    </form>
+  </div>
+  {% endif %}
+</div>
+
+<form action="{{ form_action }}" method="post" class="space-y-8">
+
+  {# ── Identity ─────────────────────────────────────────────────── #}
+  <div class="glass p-6">
+    <h2 class="text-sm font-semibold uppercase tracking-widest text-white/55 mb-4">Identity</h2>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <label class="block">
+        <span class="text-xs text-white/65 mb-1 block">Name <span class="text-rose-300">*</span></span>
+        <input class="glass-input w-full" name="name" required pattern="[A-Za-z0-9_-]+" maxlength="64"
+               value="{{ profile.name if profile else '' }}" placeholder="dev | staging | prod">
+        <span class="text-[10px] text-white/45 mt-1 block">letters, digits, dash, underscore</span>
+      </label>
+      <label class="block">
+        <span class="text-xs text-white/65 mb-1 block">Description</span>
+        <input class="glass-input w-full" name="description" maxlength="255"
+               value="{{ profile.description or '' if profile else '' }}" placeholder="e.g. Demo cluster on Docker Compose">
+      </label>
+    </div>
+  </div>
+
+  {# ── Grafana ─────────────────────────────────────────────────── #}
+  <div class="glass p-6">
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="text-sm font-semibold uppercase tracking-widest text-white/55">Grafana</h2>
+      <span class="text-[10px] uppercase tracking-widest text-white/45">env-var fallback if blank</span>
+    </div>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <label class="block">
+        <span class="text-xs text-white/65 mb-1 block">URL (server-side) <span class="mono text-[10px] text-white/40">KAIROS_GRAFANA__URL</span></span>
+        <input class="glass-input w-full" name="grafana_url" type="url"
+               value="{{ profile.grafana_url or '' if profile else '' }}" placeholder="http://grafana:3000">
+      </label>
+      <label class="block">
+        <span class="text-xs text-white/65 mb-1 block">External URL (browser) <span class="mono text-[10px] text-white/40">KAIROS_GRAFANA__EXTERNAL_URL</span></span>
+        <input class="glass-input w-full" name="grafana_external_url" type="url"
+               value="{{ profile.grafana_external_url or '' if profile else '' }}" placeholder="http://localhost:3000">
+      </label>
+      <label class="block md:col-span-2">
+        <span class="text-xs text-white/65 mb-1 block">API token <span class="mono text-[10px] text-white/40">KAIROS_GRAFANA__API_TOKEN</span></span>
+        <input class="glass-input w-full mono" name="grafana_token" type="password" autocomplete="off"
+               value="{{ profile.grafana_token or '' if profile else '' }}" placeholder="glsa_…">
+        <span class="text-[10px] text-white/45 mt-1 block">Service-account token with Editor role. Used for dashboard + alert rule provisioning + the contact-point upsert.</span>
+      </label>
+    </div>
+  </div>
+
+  {# ── Mimir ─────────────────────────────────────────────────── #}
+  <div class="glass p-6">
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="text-sm font-semibold uppercase tracking-widest text-white/55">Mimir</h2>
+      <span class="text-[10px] uppercase tracking-widest text-white/45">env-var fallback if blank</span>
+    </div>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <label class="block md:col-span-2">
+        <span class="text-xs text-white/65 mb-1 block">URL <span class="mono text-[10px] text-white/40">KAIROS_MIMIR__URL</span></span>
+        <input class="glass-input w-full" name="mimir_url" type="url"
+               value="{{ profile.mimir_url or '' if profile else '' }}" placeholder="http://mimir:8080">
+      </label>
+      <label class="block">
+        <span class="text-xs text-white/65 mb-1 block">Tenant / org-id <span class="mono text-[10px] text-white/40">KAIROS_MIMIR__ORG_ID</span></span>
+        <input class="glass-input w-full mono" name="mimir_org_id"
+               value="{{ profile.mimir_org_id or '' if profile else '' }}" placeholder="anonymous">
+      </label>
+      <label class="block">
+        <span class="text-xs text-white/65 mb-1 block">Bearer token <span class="mono text-[10px] text-white/40">KAIROS_MIMIR__AUTH_BEARER</span></span>
+        <input class="glass-input w-full mono" name="mimir_bearer" type="password" autocomplete="off"
+               value="{{ profile.mimir_bearer or '' if profile else '' }}" placeholder="(optional)">
+      </label>
+    </div>
+  </div>
+
+  {# ── GitHub ─────────────────────────────────────────────────── #}
+  <div class="glass p-6">
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="text-sm font-semibold uppercase tracking-widest text-white/55">GitHub (GitOps)</h2>
+      <span class="text-[10px] uppercase tracking-widest text-white/45">env-var fallback if blank</span>
+    </div>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <label class="block">
+        <span class="text-xs text-white/65 mb-1 block">Repository <span class="mono text-[10px] text-white/40">KAIROS_GITHUB__REPO</span></span>
+        <input class="glass-input w-full mono" name="github_repo"
+               value="{{ profile.github_repo or '' if profile else '' }}" placeholder="acme/gitops">
+      </label>
+      <label class="block">
+        <span class="text-xs text-white/65 mb-1 block">Base branch <span class="mono text-[10px] text-white/40">KAIROS_GITHUB__BASE_BRANCH</span></span>
+        <input class="glass-input w-full mono" name="github_base_branch"
+               value="{{ profile.github_base_branch or '' if profile else '' }}" placeholder="main">
+      </label>
+      <label class="block md:col-span-2">
+        <span class="text-xs text-white/65 mb-1 block">Token <span class="mono text-[10px] text-white/40">KAIROS_GITHUB__TOKEN</span></span>
+        <input class="glass-input w-full mono" name="github_token" type="password" autocomplete="off"
+               value="{{ profile.github_token or '' if profile else '' }}" placeholder="ghp_…">
+        <span class="text-[10px] text-white/45 mt-1 block">Fine-grained PAT with <em>contents:write</em> + <em>pull_requests:write</em> on the GitOps repo.</span>
+      </label>
+    </div>
+  </div>
+
+  {# ── API external URL ─────────────────────────────────────── #}
+  <div class="glass p-6">
+    <h2 class="text-sm font-semibold uppercase tracking-widest text-white/55 mb-4">Webhooks (Kairos public URL)</h2>
+    <label class="block">
+      <span class="text-xs text-white/65 mb-1 block">Externally-reachable URL of this Kairos instance <span class="mono text-[10px] text-white/40">KAIROS_API__EXTERNAL_URL</span></span>
+      <input class="glass-input w-full" name="api_external_url" type="url"
+             value="{{ profile.api_external_url or '' if profile else '' }}" placeholder="http://kairos:8080">
+      <span class="text-[10px] text-white/45 mt-1 block">Used to compute the Grafana alert webhook URL + GitHub PR-merged webhook URL Kairos hands to the upstreams.</span>
+    </label>
+  </div>
+
+  {# ── Submit ─────────────────────────────────────────────────── #}
+  <div class="flex items-center justify-between">
+    <a href="/ui/admin" class="btn-glass btn-glass-sm">Cancel</a>
+    <div class="flex items-center gap-3">
+      {% if is_new %}
+      <label class="flex items-center gap-2 text-sm text-white/75 cursor-pointer">
+        <input type="checkbox" name="activate" class="accent-emerald-400">
+        Activate after save
+      </label>
+      <button type="submit" class="btn-glass btn-glass-success">Create profile</button>
+      {% else %}
+      <button type="submit" class="btn-glass btn-glass-success">Save changes</button>
+      {% endif %}
+    </div>
+  </div>
+
+</form>
+
+{% endblock %}
