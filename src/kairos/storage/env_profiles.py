@@ -182,6 +182,63 @@ class EnvironmentProfileStore:
             await s.execute(update(EnvironmentProfileRow).values(is_active=0))
             await s.commit()
 
+    async def seed_starter_profiles(self, base: Settings) -> bool:
+        """If no profiles exist, create `nonprod` (active) + `prod` (inactive).
+
+        Both copy the current env-var-resolved URLs as a starting point. Tokens
+        are intentionally left blank so they fall through to the env-var
+        SecretStr defaults — the operator fills them in via /ui/admin/envs/<id>.
+
+        Returns True if seeding actually happened.
+        """
+        async with self._db.session() as s:
+            existing = (await s.execute(select(EnvironmentProfileRow))).scalars().all()
+            if list(existing):
+                return False
+
+        # nonprod — pre-populated from current env vars, activated. Hot-reload
+        # treats empty-fields-with-active-profile identically to no-profile, so
+        # this is a no-op functionally; it just gives the operator a card to edit.
+        nonprod = await self.create(
+            name="nonprod",
+            description="Non-production (dev / staging / QA) — copies current env-var values",
+            grafana_url=str(base.grafana.url) if base.grafana.url else None,
+            grafana_external_url=(
+                str(base.grafana.external_url) if base.grafana.external_url else None
+            ),
+            grafana_token=None,
+            mimir_url=str(base.mimir.url) if base.mimir.url else None,
+            mimir_org_id=base.mimir.org_id,
+            mimir_bearer=None,
+            github_repo=base.github.repo or None,
+            github_token=None,
+            github_base_branch=base.github.base_branch or None,
+            api_external_url=str(base.api.external_url) if base.api.external_url else None,
+        )
+        await self.activate(nonprod.id)
+
+        # prod — same starting point so the operator can see the diff. They
+        # edit the URLs / tokens to point at production. Stays inactive until
+        # explicitly activated.
+        await self.create(
+            name="prod",
+            description="Production — edit URLs + tokens, then activate when ready",
+            grafana_url=str(base.grafana.url) if base.grafana.url else None,
+            grafana_external_url=(
+                str(base.grafana.external_url) if base.grafana.external_url else None
+            ),
+            grafana_token=None,
+            mimir_url=str(base.mimir.url) if base.mimir.url else None,
+            mimir_org_id=base.mimir.org_id,
+            mimir_bearer=None,
+            github_repo=base.github.repo or None,
+            github_token=None,
+            github_base_branch=base.github.base_branch or None,
+            api_external_url=str(base.api.external_url) if base.api.external_url else None,
+        )
+        log.info("env_profiles_seeded", profiles=["nonprod", "prod"], active="nonprod")
+        return True
+
 
 def apply_active_profile(base: Settings, profile: EnvironmentProfile | None) -> Settings:
     """Return a Settings copy with the active profile's non-empty fields merged in.

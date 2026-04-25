@@ -157,6 +157,14 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
 
         app.state.incoming_alerts = IncomingAlertStore(db)
         app.state.env_profiles = EnvironmentProfileStore(db)
+        # Seed starter profiles (nonprod + prod) on first boot so the operator
+        # has something to edit. No-op on subsequent boots.
+        try:
+            seeded = await app.state.env_profiles.seed_starter_profiles(settings)
+            if seeded:
+                log.info("env_profiles_starter_seeded")
+        except Exception as exc:
+            log.warning("env_profiles_seed_failed", error=str(exc))
     except Exception as exc:
         log.warning("audit_db_bootstrap_failed", error=str(exc))
 
