@@ -110,6 +110,26 @@ class TeamsSettings(BaseModel):
     timeout_seconds: float = 10.0
 
 
+class CloudEventsSettings(BaseModel):
+    """Outbound CloudEvents 1.0 webhook target.
+
+    When emit_cloudevents=True and webhook_url is set, every notification fan-out
+    also POSTs a CloudEvents-wrapped envelope to this URL. Used by Knative
+    EventSources, Azure Event Grid endpoints, AWS EventBridge ingestion, etc.
+    """
+
+    webhook_url: HttpUrl | None = None
+    source: str = Field(
+        default="https://kairos.local/",
+        description="The CloudEvent.source URI-reference identifying this Kairos instance.",
+    )
+    timeout_seconds: float = Field(default=5.0, gt=0, le=60)
+    mode: Literal["structured", "binary"] = Field(
+        default="structured",
+        description="structured = JSON body with envelope; binary = ce-* headers + raw data",
+    )
+
+
 class SlackSettings(BaseModel):
     webhook_url: SecretStr | None = None
     bot_token: SecretStr | None = None
@@ -202,6 +222,10 @@ class FeatureFlags(BaseModel):
     # creating a PR directly. UI approval triggers the PR.
     require_ui_approval: bool = True
     enable_ui: bool = True
+    # CloudEvents 1.0 envelope on outbound webhooks/notifications. Enables any
+    # CE-aware sink (Knative EventSource, Azure Event Grid, AWS EventBridge)
+    # to consume Kairos events without a custom adapter.
+    emit_cloudevents: bool = False
 
 
 class APISettings(BaseModel):
@@ -268,6 +292,7 @@ class Settings(BaseSettings):
     teams: TeamsSettings = TeamsSettings()
     slack: SlackSettings = SlackSettings()
     smtp: SMTPSettings = SMTPSettings()
+    cloudevents: CloudEventsSettings = CloudEventsSettings()
     k8s: K8sSettings = K8sSettings()
     scheduler: SchedulerSettings = SchedulerSettings()
     forecasting: ForecastingSettings = ForecastingSettings()

@@ -50,6 +50,7 @@ class NotificationChannel(StrEnum):
     TEAMS = "teams"
     SLACK = "slack"
     EMAIL = "email"
+    CLOUDEVENTS = "cloudevents"
 
 
 class ForecastModel(StrEnum):

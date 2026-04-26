@@ -117,6 +117,33 @@ async def _build_pipeline(request: Request) -> Any:
     # Audit: prefer SQL store when the DB bootstrapped successfully.
     audit = getattr(state, "sql_audit", None) or JSONLogAuditStore()
 
+    # Build a notifier dispatcher when CloudEvents emission is enabled and a
+    # webhook URL is configured. The standard Email/Slack/Teams notifiers stay
+    # off the pipeline path here; they're attached separately when configured.
+    notifier_dispatcher = None
+    if (
+        settings.features.emit_cloudevents
+        and settings.cloudevents.webhook_url is not None
+    ):
+        from kairos.notify.cloudevents_notifier import CloudEventsNotifier  # noqa: PLC0415
+        from kairos.notify.dispatcher import NotifyDispatcher  # noqa: PLC0415
+        from kairos.storage.dedup import DedupStore  # noqa: PLC0415
+        from kairos.storage.redis_client import RedisClient  # noqa: PLC0415
+
+        try:
+            redis_client = RedisClient.from_settings(settings.redis)
+            dedup = DedupStore(
+                redis_client,
+                ttl_pr=settings.redis.dedup_ttl_pr_seconds,
+                ttl_notify=settings.redis.dedup_ttl_notify_seconds,
+                ttl_forecast=settings.redis.dedup_ttl_forecast_seconds,
+            )
+            notifier_dispatcher = NotifyDispatcher(
+                [CloudEventsNotifier(settings.cloudevents)], dedup
+            )
+        except Exception as exc:
+            log.warning("cloudevents_notifier_unavailable", error=str(exc))
+
     deps = PipelineDeps(
         discovery=discovery,
         mimir=mimir,
@@ -125,7 +152,7 @@ async def _build_pipeline(request: Request) -> Any:
         decision=engine,
         advisor=None,
         pr_creator=getattr(state, "pr_creator", None),
-        notifier=None,
+        notifier=notifier_dispatcher,
         audit=audit,
         settings=settings,
         approvals=getattr(state, "approvals", None),
