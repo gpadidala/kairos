@@ -622,6 +622,10 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
       KEDA Activity
     </a>
+    <a href="/ui/keda/catalog" class="sidebar-link" {% if active == 'keda-catalog' %}aria-current="page"{% endif %}>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16"/></svg>
+      Scaler catalog
+    </a>
     <a href="/ui/alerts" class="sidebar-link" {% if active == 'alerts' %}aria-current="page"{% endif %}>
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m0 6.5h.008v.008H12v-.008zm-9.36-1.81a1.5 1.5 0 011.305-2.252h16.11a1.5 1.5 0 011.305 2.252l-8.055 13.96a1.5 1.5 0 01-2.61 0l-8.055-13.96z"/></svg>
       Alerts
@@ -750,8 +754,9 @@
     {label: "Pending approvals", href: "/ui/pending",   hint: "g p"},
     {label: "Workloads",         href: "/ui/workloads", hint: "g w"},
     {label: "History",           href: "/ui/history",   hint: "g h"},
-    {label: "KEDA Activity",     href: "/ui/keda",      hint: "g k"},
-    {label: "Alerts",            href: "/ui/alerts",    hint: "g a"},
+    {label: "KEDA Activity",     href: "/ui/keda",         hint: "g k"},
+    {label: "KEDA Scaler Catalog", href: "/ui/keda/catalog", hint: ""},
+    {label: "Alerts",            href: "/ui/alerts",       hint: "g a"},
     {label: "Admin",             href: "/ui/admin",     hint: "g s"},
     {label: "API Docs",          href: "/docs",         hint: ""},
     {label: "Metrics",           href: "/metrics",      hint: ""},

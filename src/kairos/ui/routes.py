@@ -462,6 +462,87 @@ def build_ui_router() -> APIRouter:  # noqa: PLR0915 — single factory register
             ),
         )
 
+    @router.get("/ui/keda/catalog", response_class=HTMLResponse, include_in_schema=False)
+    async def ui_keda_catalog(request: Request, deps: dict[str, Any] = DepsDep) -> HTMLResponse:
+        from kairos.keda import SCALERS  # noqa: PLC0415
+        from kairos.keda.catalog import ScalerCategory  # noqa: PLC0415
+
+        groups: dict[str, list[Any]] = {c.value: [] for c in ScalerCategory}
+        for s in SCALERS:
+            groups[s.category.value].append(s)
+        return templates.TemplateResponse(
+            request,
+            "keda_catalog.html.j2",
+            await _ctx(
+                deps,
+                groups=groups,
+                category_labels={
+                    "message_broker": "Message brokers & streams",
+                    "data_store": "Datastores & query results",
+                    "cloud": "Cloud services",
+                    "observability": "Observability sources",
+                    "time": "Time / control",
+                    "resource": "Resource (CPU / memory)",
+                },
+                total=len(SCALERS),
+            ),
+        )
+
+    @router.get("/api/v1/keda/scaledobject/preview", include_in_schema=False)
+    async def api_scaledobject_preview(workload_uid: str, request: Request) -> dict[str, Any]:
+        """Render the ScaledObject YAML Kairos would emit for a given workload uid.
+
+        workload_uid format: '<Kind>/<namespace>/<name>'.
+        """
+        from kairos.discovery.workload_discovery import WorkloadDiscovery  # noqa: PLC0415
+        from kairos.keda import (  # noqa: PLC0415
+            ScaledObjectSpec,
+            lint_scaled_object,
+            render_scaled_object,
+        )
+        from kairos.keda.generator import (  # noqa: PLC0415
+            ScaleTargetRef,
+            suggest_trigger_for_workload,
+        )
+
+        s = request.app.state.settings
+        try:
+            disc = WorkloadDiscovery.from_settings(s.k8s)
+            workloads = await disc.list()
+        except Exception as exc:
+            raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, str(exc)) from exc
+
+        wl = next((w for w in workloads if w.uid == workload_uid), None)
+        if wl is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "workload not found")
+
+        trig = suggest_trigger_for_workload(wl.annotations)
+        if trig is None:
+            return {
+                "yaml": None,
+                "findings": [],
+                "hint": (
+                    "No KEDA trigger annotations on this workload. Add one of "
+                    "kairos.io/kafka-topic, kairos.io/rabbitmq-queue, "
+                    "kairos.io/sqs-queue-url, or kairos.io/prometheus-query."
+                ),
+            }
+
+        spec = ScaledObjectSpec(
+            name=f"{wl.name}-scaler",
+            namespace=wl.namespace,
+            target=ScaleTargetRef(name=wl.name, kind=wl.kind.value),
+            min_replicas=0,
+            max_replicas=max(wl.current_replicas * 5, 10),
+            triggers=[trig],
+        )
+        findings = lint_scaled_object(spec)
+        return {
+            "yaml": render_scaled_object(spec),
+            "findings": [f.model_dump() for f in findings],
+            "hint": None,
+        }
+
     @router.get("/ui/keda", response_class=HTMLResponse, include_in_schema=False)
     async def ui_keda(request: Request, deps: dict[str, Any] = DepsDep) -> HTMLResponse:
         grafana: GrafanaClient | None = deps["grafana"]
@@ -671,7 +752,7 @@ def build_ui_router() -> APIRouter:  # noqa: PLR0915 — single factory register
         response_class=HTMLResponse,
         include_in_schema=False,
     )
-    async def ui_workload_detail(
+    async def ui_workload_detail(  # noqa: PLR0912 — flat per-section build is clearer than refactor
         namespace: str,
         name: str,
         request: Request,
@@ -739,6 +820,40 @@ def build_ui_router() -> APIRouter:  # noqa: PLR0915 — single factory register
                 if d.workload_uid == workload.uid:
                     decisions_for_workload.append(d)
 
+        # ScaledObject preview — render YAML + lint findings if annotations
+        # describe a recognized event source.
+        from kairos.keda import (  # noqa: PLC0415
+            ScaledObjectSpec,
+            lint_scaled_object,
+            render_scaled_object,
+        )
+        from kairos.keda.generator import (  # noqa: PLC0415
+            ScaleTargetRef,
+            suggest_trigger_for_workload,
+        )
+
+        scaledobject_yaml: str | None = None
+        scaledobject_findings: list[Any] = []
+        scaledobject_hint: str | None = None
+        if (trig := suggest_trigger_for_workload(workload.annotations)) is not None:
+            spec_obj = ScaledObjectSpec(
+                name=f"{workload.name}-scaler",
+                namespace=workload.namespace,
+                target=ScaleTargetRef(name=workload.name, kind=workload.kind.value),
+                min_replicas=0,
+                max_replicas=max(workload.current_replicas * 5, 10),
+                triggers=[trig],
+            )
+            scaledobject_yaml = render_scaled_object(spec_obj)
+            scaledobject_findings = lint_scaled_object(spec_obj)
+        else:
+            scaledobject_hint = (
+                "No KEDA trigger annotations on this workload. Add one of "
+                "kairos.io/kafka-topic, kairos.io/rabbitmq-queue, "
+                "kairos.io/sqs-queue-url, or kairos.io/prometheus-query "
+                "and reload to see a generated ScaledObject."
+            )
+
         return templates.TemplateResponse(
             request,
             "workload_detail.html.j2",
@@ -751,6 +866,9 @@ def build_ui_router() -> APIRouter:  # noqa: PLR0915 — single factory register
                 keda_errors=keda_errors,
                 decisions=decisions_for_workload[:25],
                 grafana_url=deps["settings"].grafana.public_url,
+                scaledobject_yaml=scaledobject_yaml,
+                scaledobject_findings=scaledobject_findings,
+                scaledobject_hint=scaledobject_hint,
             ),
         )
 

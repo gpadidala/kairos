@@ -113,6 +113,42 @@
   </div>
 </div>
 
+<!-- ScaledObject preview (KEDA) -->
+<section style="margin-bottom: var(--space-7);" aria-labelledby="so-title">
+  <div class="flex items-center justify-between" style="margin-bottom: var(--space-3);">
+    <h2 id="so-title" class="t-eyebrow" style="margin: 0;">KEDA · ScaledObject preview</h2>
+    <a href="/ui/keda/catalog" class="t-body-sm" style="color: var(--brand);">Browse scaler catalog →</a>
+  </div>
+  {% if scaledobject_yaml %}
+  <div class="glass" style="padding: var(--space-5);">
+    {% if scaledobject_findings %}
+    <ul style="list-style: none; padding: 0; margin: 0 0 var(--space-3); display: grid; gap: 6px;">
+      {% for f in scaledobject_findings %}
+      <li class="flex items-start" style="gap: var(--space-2);">
+        <span class="pill {% if f.severity == 'error' %}pill-danger{% elif f.severity == 'warning' %}pill-warn{% else %}pill-info{% endif %}" style="font-size: 10px;">{{ f.code }}</span>
+        <span class="t-body-sm" style="color: var(--fg-dim);">{{ f.message }}</span>
+      </li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+
+    <div class="flex items-center justify-between" style="margin-bottom: var(--space-2);">
+      <span class="t-eyebrow">Generated YAML</span>
+      <button class="btn btn-sm" id="copy-so" onclick="(()=>{const t=document.getElementById('so-yaml').textContent;navigator.clipboard.writeText(t);window.toast('ScaledObject YAML copied','success')})()">
+        <svg viewBox="0 0 24 24" class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M8 5h-2a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1m-2-12h2a2 2 0 012 2v3m-12-5a2 2 0 002 2h4a2 2 0 002-2M8 5a2 2 0 012-2h4a2 2 0 012 2"/></svg>
+        Copy
+      </button>
+    </div>
+    <pre id="so-yaml" class="mono" style="font-size: var(--text-xs); background: rgba(0,0,0,0.30); border-radius: var(--radius-md); padding: var(--space-3); overflow-x: auto; color: rgba(255,255,255,0.85); line-height: 1.6; border: 1px solid var(--border); margin: 0;">{{ scaledobject_yaml }}</pre>
+  </div>
+  {% else %}
+  <div class="glass" style="padding: var(--space-5); text-align: center; color: var(--fg-dim);">
+    <p class="t-body-sm" style="margin: 0;">{{ scaledobject_hint }}</p>
+    <a href="/ui/keda/catalog" class="btn btn-sm" style="margin-top: var(--space-3);">See available scalers</a>
+  </div>
+  {% endif %}
+</section>
+
 <!-- Recent decisions for this workload -->
 <h2 class="text-sm font-semibold uppercase tracking-widest text-white/55 mb-3">Recent decisions</h2>
 <div class="glass overflow-hidden">

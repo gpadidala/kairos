@@ -1,0 +1,92 @@
+{% extends "base.html.j2" %}
+{% set active = "keda-catalog" %}
+{% block title %}KEDA Scaler Catalog{% endblock %}
+{% block content %}
+
+<header style="margin-bottom: var(--space-7);">
+  <div class="t-eyebrow" style="margin-bottom: var(--space-2);">KEDA</div>
+  <h1 class="t-h1" style="margin: 0;">Scaler catalog</h1>
+  <p class="t-body-sm" style="max-width: 64ch; margin: var(--space-2) 0 0;">
+    The <span class="num">{{ total }}</span> KEDA scalers Kairos knows how to generate ScaledObject YAML for.
+    Source-of-truth: <a href="https://github.com/gpadidala/kairos/blob/main/docs/keda-reference.md" target="_blank" rel="noopener">docs/keda-reference.md</a>.
+    For any scaler not listed, configure it directly &mdash; KEDA accepts ~70 in total.
+  </p>
+</header>
+
+{% for cat_key, label in category_labels.items() %}
+  {% set scalers = groups.get(cat_key, []) %}
+  {% if scalers %}
+  <section aria-labelledby="cat-{{ cat_key }}" style="margin-bottom: var(--space-7);">
+    <div class="flex items-center justify-between" style="margin-bottom: var(--space-4);">
+      <h2 id="cat-{{ cat_key }}" class="t-eyebrow" style="margin: 0;">{{ label }}</h2>
+      <span class="t-caption num">{{ scalers | length }} scaler{{ '' if scalers|length == 1 else 's' }}</span>
+    </div>
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3" style="gap: var(--space-3);">
+      {% for s in scalers %}
+      <article class="glass" style="padding: var(--space-5);">
+        <header class="flex items-start justify-between" style="gap: var(--space-3); margin-bottom: var(--space-3);">
+          <div>
+            <h3 class="t-h3" style="margin: 0;">{{ s.name }}</h3>
+            <span class="pill pill-mono" style="margin-top: var(--space-1);">{{ s.type }}</span>
+          </div>
+          <a href="{{ s.docs_url }}" target="_blank" rel="noopener" class="btn btn-sm" aria-label="{{ s.name }} docs (opens in new tab)">
+            Docs
+            <svg viewBox="0 0 24 24" class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M14 3h7v7M10 14L21 3"/></svg>
+          </a>
+        </header>
+
+        <p class="t-body-sm" style="margin: 0 0 var(--space-3);">{{ s.summary }}</p>
+
+        <div style="padding: var(--space-3); border-radius: var(--radius-md); background: rgba(255,255,255,0.03); border: 1px solid var(--border); margin-bottom: var(--space-3);">
+          <div class="t-eyebrow" style="margin-bottom: var(--space-1);">Metric meaning</div>
+          <p class="t-body-sm" style="margin: 0;">{{ s.metric_meaning }}</p>
+        </div>
+
+        <div class="t-eyebrow" style="margin-bottom: var(--space-1);">Key fields</div>
+        <ul style="list-style: none; padding: 0; margin: 0 0 var(--space-3); display: grid; gap: 4px;">
+          {% for f in s.fields[:5] %}
+          <li class="flex items-baseline" style="gap: var(--space-2); font-size: var(--text-xs);">
+            <span class="mono" style="color: var(--info-fg); flex-shrink: 0;">{{ f.name }}</span>
+            {% if f.required %}<span class="pill pill-warn" style="font-size: 9px; padding: 0 4px; min-height: 14px;">required</span>{% endif %}
+            <span style="color: var(--fg-dim);">{{ f.description }}</span>
+          </li>
+          {% endfor %}
+          {% if s.fields | length > 5 %}
+          <li class="t-caption" style="margin-top: 4px;">… and {{ s.fields | length - 5 }} more (see docs)</li>
+          {% endif %}
+        </ul>
+
+        {% if s.auth_modes %}
+        <div class="flex items-center" style="gap: var(--space-2); flex-wrap: wrap; margin-bottom: var(--space-2);">
+          <span class="t-eyebrow">Auth</span>
+          {% for am in s.auth_modes %}
+          <span class="pill pill-info pill-mono">{{ am }}</span>
+          {% endfor %}
+        </div>
+        {% endif %}
+
+        {% if s.activation_field %}
+        <div class="t-caption" style="margin-bottom: var(--space-2);">
+          Wake-from-zero field:
+          <span class="mono" style="color: var(--fg);">{{ s.activation_field }}</span>
+        </div>
+        {% endif %}
+
+        {% if s.notes %}
+        <ul style="list-style: none; padding: 0; margin: var(--space-2) 0 0; display: grid; gap: 4px;">
+          {% for n in s.notes %}
+          <li class="t-caption" style="padding-left: var(--space-3); position: relative;">
+            <span style="position: absolute; left: 0; color: var(--brand);">›</span>
+            {{ n }}
+          </li>
+          {% endfor %}
+        </ul>
+        {% endif %}
+      </article>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+{% endfor %}
+
+{% endblock %}
