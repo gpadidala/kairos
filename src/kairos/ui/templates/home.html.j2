@@ -3,58 +3,46 @@
 {% block title %}Home{% endblock %}
 {% block content %}
 
-{# ── Hero — one primary CTA, secondaries subordinate ─────────── #}
-<section aria-labelledby="hero-title" class="relative mb-12 overflow-hidden rounded-3xl glass-strong">
-  <div class="absolute inset-0 -z-10 opacity-50" aria-hidden="true"
-       style="background:
-         radial-gradient(600px 400px at 15% 20%, rgba(110,168,255,0.40), transparent 60%),
-         radial-gradient(700px 500px at 90% 30%, rgba(180,90,255,0.30), transparent 60%),
-         radial-gradient(500px 400px at 60% 110%, rgba(255,110,180,0.25), transparent 60%);"></div>
-
-  <div class="px-8 py-12 md:py-16 md:px-14">
-    <div class="t-eyebrow flex items-center gap-2" style="margin-bottom: var(--space-4);">
-      <span class="w-1.5 h-1.5 rounded-full" style="background: var(--success); box-shadow: 0 0 10px rgba(52,211,153,0.7);" aria-hidden="true"></span>
-      Predictive Capacity & Autoscaling Platform · v0.1.0 · {{ settings.environment }}
-    </div>
-    <h1 id="hero-title" class="t-display" style="margin: 0 0 var(--space-3); max-width: 18ch;">
-      The right scale,<br>
-      <span style="background: linear-gradient(90deg, #93c5fd, #67e8f9, #6ee7b7); -webkit-background-clip: text; background-clip: text; color: transparent;">at the right moment.</span>
-    </h1>
-    <p class="t-body" style="max-width: 60ch; color: var(--fg-dim); margin: 0 0 var(--space-6);">
-      Kairos forecasts workload load <strong style="color: var(--fg);">48 hours</strong> ahead,
-      surfaces the change for human review, and opens the GitOps PR — so KEDA never has to react
-      to a cliff that was already on the timetable.
-    </p>
-
-    <div class="flex flex-wrap items-center" style="gap: var(--space-3);">
-      <a href="/ui/dashboard" class="btn btn-primary">
-        <svg viewBox="0 0 24 24" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M3 12l2-2 4 4 8-8 4 4"/></svg>
-        Open Overview
-      </a>
-      <a href="#demo" class="btn btn-sm">See the demo</a>
-      <a href="#architecture" class="btn btn-sm">Architecture</a>
-      <a href="/ui/admin" class="btn btn-sm">Admin setup</a>
-    </div>
-
-    <dl class="grid grid-cols-2 md:grid-cols-4 mt-10" style="gap: var(--space-5); max-width: 56rem;">
-      <div>
-        <dd class="num" style="font-size: var(--text-2xl); font-weight: 700; line-height: 1; letter-spacing: -0.04em;">48h</dd>
-        <dt class="t-eyebrow" style="margin-top: var(--space-2);">forecast horizon</dt>
-      </div>
-      <div>
-        <dd class="num" style="font-size: var(--text-2xl); font-weight: 700; line-height: 1; letter-spacing: -0.04em;">14d</dd>
-        <dt class="t-eyebrow" style="margin-top: var(--space-2);">historical lookback</dt>
-      </div>
-      <div>
-        <dd class="num" style="font-size: var(--text-2xl); font-weight: 700; line-height: 1; letter-spacing: -0.04em;">8</dd>
-        <dt class="t-eyebrow" style="margin-top: var(--space-2);">decision rules</dt>
-      </div>
-      <div>
-        <dd class="num" style="font-size: var(--text-2xl); font-weight: 700; line-height: 1; letter-spacing: -0.04em;">5min</dd>
-        <dt class="t-eyebrow" style="margin-top: var(--space-2);">alert eval cadence</dt>
-      </div>
-    </dl>
+{# ── Hero — flat, single primary CTA, big type ─────────────── #}
+<section aria-labelledby="hero-title" style="margin-bottom: var(--space-9); padding-top: var(--space-7);">
+  <div class="t-eyebrow flex items-center gap-2" style="margin-bottom: var(--space-5);">
+    <span class="w-1.5 h-1.5 rounded-full" style="background: var(--success); box-shadow: 0 0 10px rgba(74,222,128,0.6);" aria-hidden="true"></span>
+    Predictive Capacity & Autoscaling Platform · v0.1.0 · {{ settings.environment }}
   </div>
+  <h1 id="hero-title" class="t-display" style="margin: 0 0 var(--space-5); max-width: 18ch; color: var(--fg);">
+    The right scale,<br>
+    <span style="color: var(--brand);">at the right moment.</span>
+  </h1>
+  <p style="font-size: var(--text-md); line-height: 1.55; max-width: 64ch; color: var(--fg-dim); margin: 0 0 var(--space-7);">
+    Kairos forecasts workload load <strong style="color: var(--fg); font-weight: 600;">48 hours</strong> ahead,
+    surfaces the change for human review, and opens the GitOps PR — so KEDA never has to react
+    to a cliff that was already on the timetable.
+  </p>
+
+  <div class="flex flex-wrap items-center" style="gap: var(--space-2);">
+    <a href="/ui/dashboard" class="btn btn-primary btn-lg">Open Overview →</a>
+    <a href="#demo" class="btn btn-lg">See the demo</a>
+    <a href="#architecture" class="btn btn-lg">Architecture</a>
+  </div>
+
+  <dl class="grid grid-cols-2 md:grid-cols-4" style="gap: var(--space-7); max-width: 56rem; margin-top: var(--space-9); padding-top: var(--space-7); border-top: 1px solid var(--border);">
+    <div>
+      <dd class="num" style="font-size: var(--text-2xl); font-weight: 600; line-height: 1; letter-spacing: -0.03em; color: var(--fg);">48h</dd>
+      <dt class="t-eyebrow" style="margin-top: var(--space-2);">forecast horizon</dt>
+    </div>
+    <div>
+      <dd class="num" style="font-size: var(--text-2xl); font-weight: 600; line-height: 1; letter-spacing: -0.03em; color: var(--fg);">14d</dd>
+      <dt class="t-eyebrow" style="margin-top: var(--space-2);">historical lookback</dt>
+    </div>
+    <div>
+      <dd class="num" style="font-size: var(--text-2xl); font-weight: 600; line-height: 1; letter-spacing: -0.03em; color: var(--fg);">8</dd>
+      <dt class="t-eyebrow" style="margin-top: var(--space-2);">decision rules</dt>
+    </div>
+    <div>
+      <dd class="num" style="font-size: var(--text-2xl); font-weight: 600; line-height: 1; letter-spacing: -0.03em; color: var(--fg);">5 min</dd>
+      <dt class="t-eyebrow" style="margin-top: var(--space-2);">alert eval cadence</dt>
+    </div>
+  </dl>
 </section>
 
 {# ── What it is ──────────────────────────────────────────────────── #}
