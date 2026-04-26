@@ -5,12 +5,19 @@ from __future__ import annotations
 import yaml
 
 from kairos.keda import (
+    AzureWorkloadIdentityBundleSpec,
     HTTPScaledObjectSpec,
+    JobContainerSpec,
+    ScaledJobSpec,
     ScaledObjectSpec,
     TriggerAuthenticationSpec,
     get_scaler,
+    lint_http_scaled_object,
     lint_scaled_object,
+    lint_trigger_authentication,
+    render_azure_workload_identity_bundle,
     render_http_scaled_object,
+    render_scaled_job,
     render_scaled_object,
     render_trigger_authentication,
 )
@@ -239,3 +246,127 @@ def test_lint_unknown_scaler_warns_not_errors() -> None:
     findings = lint_scaled_object(so)
     assert any(f.code == "KEDA-100" for f in findings)
     assert not any(f.code == "KEDA-101" and f.severity == "error" for f in findings)
+
+
+# ── Round 1: ScaledJob ─────────────────────────────────────────────
+def test_render_scaled_job_round_trips() -> None:
+    spec = ScaledJobSpec(
+        name="transcode-job",
+        namespace="media",
+        container=JobContainerSpec(
+            name="ffmpeg",
+            image="myorg/transcoder:1.2.3",
+            args=["--queue", "transcode"],
+        ),
+        active_deadline_seconds=3600,
+        max_replica_count=50,
+        triggers=[
+            TriggerSpec(
+                type="rabbitmq",
+                metadata={
+                    "queueName": "transcode",
+                    "mode": "QueueLength",
+                    "value": "1",
+                },
+                authenticationRef={"name": "rabbit-auth"},
+            )
+        ],
+    )
+    parsed = yaml.safe_load(render_scaled_job(spec))
+    assert parsed["kind"] == "ScaledJob"
+    assert parsed["spec"]["jobTargetRef"]["activeDeadlineSeconds"] == 3600
+    assert parsed["spec"]["jobTargetRef"]["template"]["spec"]["restartPolicy"] == "Never"
+    assert parsed["spec"]["maxReplicaCount"] == 50
+    assert parsed["spec"]["triggers"][0]["type"] == "rabbitmq"
+
+
+# ── Round 1: Azure Workload Identity bundle ───────────────────────
+def test_render_azure_workload_identity_bundle_emits_sa_and_trigger_auth() -> None:
+    spec = AzureWorkloadIdentityBundleSpec(
+        namespace="workers",
+        service_account_name="kairos-keda-sa",
+        azure_client_id="00000000-0000-0000-0000-000000000001",
+        azure_tenant_id="00000000-0000-0000-0000-000000000002",
+        trigger_auth_name="kairos-keda-auth",
+        aks_oidc_issuer_url="https://oidc.prod-aks.azure.com/abc/",
+    )
+    out = render_azure_workload_identity_bundle(spec)
+    docs = [d for d in yaml.safe_load_all(out) if d is not None]
+    kinds = {d["kind"] for d in docs}
+    assert kinds == {"ServiceAccount", "TriggerAuthentication"}
+    sa = next(d for d in docs if d["kind"] == "ServiceAccount")
+    assert (
+        sa["metadata"]["annotations"]["azure.workload.identity/client-id"]
+        == "00000000-0000-0000-0000-000000000001"
+    )
+    assert sa["metadata"]["labels"]["azure.workload.identity/use"] == "true"
+    ta = next(d for d in docs if d["kind"] == "TriggerAuthentication")
+    assert ta["spec"]["podIdentity"]["provider"] == "azure-workload"
+    # az CLI hint preserved as comment
+    assert "az identity federated-credential create" in out
+    assert spec.aks_oidc_issuer_url in out
+
+
+# ── Round 1: lint_trigger_authentication ──────────────────────────
+def test_lint_trigger_auth_warns_on_deprecated_pod_identity() -> None:
+    spec = TriggerAuthenticationSpec(
+        name="legacy",
+        namespace="workers",
+        pod_identity_provider="azure",
+    )
+    findings = lint_trigger_authentication(spec)
+    assert any(f.code == "KEDA-104" and f.severity == "warning" for f in findings)
+
+
+def test_lint_trigger_auth_recommends_workload_identity_for_secrets() -> None:
+    spec = TriggerAuthenticationSpec(
+        name="kafka-auth",
+        namespace="workers",
+        secret_target_refs=[
+            SecretTargetRef(parameter="username", name="creds", key="username"),
+        ],
+    )
+    findings = lint_trigger_authentication(spec)
+    assert any(f.code == "KEDA-105" and f.severity == "info" for f in findings)
+
+
+def test_lint_trigger_auth_clean_for_workload_identity() -> None:
+    spec = TriggerAuthenticationSpec(
+        name="aks-auth",
+        namespace="workers",
+        pod_identity_provider="azure-workload",
+        pod_identity_id="abcd-1234",
+    )
+    findings = lint_trigger_authentication(spec)
+    assert not any(f.severity in ("warning", "error") for f in findings)
+
+
+# ── Round 1: lint_http_scaled_object ──────────────────────────────
+def _http_so(*, max_replicas: int = 30, target_value: int = 100) -> HTTPScaledObjectSpec:
+    return HTTPScaledObjectSpec(
+        name="api-scaler",
+        namespace="prod",
+        hosts=["api.example.com"],
+        target=HTTPScaleTargetRef(name="api", service="api", port=8080),
+        max_replicas=max_replicas,
+        metric=HTTPScalingMetric(target_value=target_value),
+    )
+
+
+def test_lint_http_always_emits_beta_advisory() -> None:
+    findings = lint_http_scaled_object(_http_so())
+    assert any(f.code == "KEDA-200" and f.severity == "info" for f in findings)
+
+
+def test_lint_http_max_below_min_error() -> None:
+    spec = _http_so()
+    spec.min_replicas = 10
+    spec.max_replicas = 5
+    findings = lint_http_scaled_object(spec)
+    assert any(f.code == "KEDA-201" and f.severity == "error" for f in findings)
+
+
+def test_lint_http_low_target_value_warning() -> None:
+    spec = _http_so(target_value=2)
+    findings = lint_http_scaled_object(spec)
+    assert any(f.code == "KEDA-202" and f.severity == "warning" for f in findings)

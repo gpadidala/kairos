@@ -11,7 +11,12 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from kairos.keda.catalog import get_scaler
-from kairos.keda.generator import ScaledObjectSpec, TriggerSpec
+from kairos.keda.generator import (
+    HTTPScaledObjectSpec,
+    ScaledObjectSpec,
+    TriggerAuthenticationSpec,
+    TriggerSpec,
+)
 
 
 class LintFinding(BaseModel):
@@ -116,6 +121,92 @@ def lint_scaled_object(
             )
         )
 
+    return findings
+
+
+def lint_trigger_authentication(spec: TriggerAuthenticationSpec) -> list[LintFinding]:
+    """Lint a TriggerAuthentication for deprecated patterns.
+
+    KEDA 2.15+ removed the legacy `aad-pod-identity` provider. The replacement
+    on Azure is Microsoft Entra Workload Identity (`azure-workload`). We surface
+    this as a warning when operators still emit the old form.
+    """
+    findings: list[LintFinding] = []
+
+    # KEDA-104: deprecated pod-identity provider (aad-pod-identity)
+    if spec.pod_identity_provider in ("azure", "aad-pod-identity"):
+        findings.append(
+            LintFinding(
+                code="KEDA-104",
+                severity="warning",
+                message=(
+                    "podIdentity.provider 'azure' (aad-pod-identity) was removed in KEDA 2.15+. "
+                    "Migrate to 'azure-workload' (Microsoft Entra Workload Identity). "
+                    "AKS managed add-on will start running 2.15+ in the AKS 1.31 preview."
+                ),
+                field="pod_identity_provider",
+            )
+        )
+
+    # KEDA-105: prefer cloud-native identity over inline secret bundles
+    if spec.secret_target_refs and spec.pod_identity_provider is None:
+        findings.append(
+            LintFinding(
+                code="KEDA-105",
+                severity="info",
+                message=(
+                    "Auth uses Kubernetes Secrets. For cloud-native deployments, "
+                    "prefer Workload Identity (AKS), IRSA (EKS), or GCP Workload Identity. "
+                    "Cloud-native identity removes the secret rotation burden."
+                ),
+                field="secret_target_refs",
+            )
+        )
+    return findings
+
+
+def lint_http_scaled_object(spec: HTTPScaledObjectSpec) -> list[LintFinding]:
+    """Lint an HTTPScaledObject — surfaces the HTTP-add-on beta caveats."""
+    findings: list[LintFinding] = []
+
+    # KEDA-200: HTTP add-on beta advisory (always-on info)
+    findings.append(
+        LintFinding(
+            code="KEDA-200",
+            severity="info",
+            message=(
+                "KEDA HTTP Add-on is pre-1.0 (beta). Pin the chart version and expect "
+                "schema drift on minor upgrades. For workloads that can't tolerate a "
+                "queue-based proxy, consider Knative Serving or Prometheus request-rate."
+            ),
+            field=None,
+        )
+    )
+
+    # KEDA-201: max < min sanity (mirrors KEDA-002 for ScaledObject)
+    if spec.max_replicas <= spec.min_replicas:
+        findings.append(
+            LintFinding(
+                code="KEDA-201",
+                severity="error",
+                message="replicas.max must be greater than replicas.min.",
+                field="max_replicas",
+            )
+        )
+
+    # KEDA-202: very small targetValue tends to over-scale
+    if spec.metric.target_value <= 5:
+        findings.append(
+            LintFinding(
+                code="KEDA-202",
+                severity="warning",
+                message=(
+                    f"requestRate.targetValue={spec.metric.target_value}/RPS-per-pod is low. "
+                    "Per-pod target < 5 RPS often produces flapping during normal traffic dips."
+                ),
+                field="metric.target_value",
+            )
+        )
     return findings
 
 

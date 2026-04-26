@@ -50,6 +50,87 @@ class ScaledObjectSpec(BaseModel):
     annotations: dict[str, str] = Field(default_factory=dict)
 
 
+# ── Model: ScaledJob (queue-driven batch / one-shot) ────────────
+class JobContainerSpec(BaseModel):
+    """Subset of the K8s container spec the operator needs to set."""
+
+    name: str = Field(min_length=1)
+    image: str = Field(min_length=1)
+    command: list[str] = Field(default_factory=list)
+    args: list[str] = Field(default_factory=list)
+    env: list[dict[str, str]] = Field(default_factory=list)
+
+
+class ScaledJobSpec(BaseModel):
+    """Generates a KEDA ScaledJob — one Job per N pending events.
+
+    Use ScaledJob (not ScaledObject) when each unit of work must run to
+    completion and shouldn't be killed mid-flight by a scale-down. Common
+    examples: video transcoding, ML inference batches, ETL extracts.
+    """
+
+    name: str = Field(min_length=1, max_length=253)
+    namespace: str = Field(min_length=1, max_length=63)
+    container: JobContainerSpec
+    polling_interval: int = Field(default=30, ge=1, le=3600)
+    max_replica_count: int = Field(default=100, ge=1, le=10_000)
+    successful_jobs_history_limit: int = Field(default=5, ge=0, le=1000)
+    failed_jobs_history_limit: int = Field(default=5, ge=0, le=1000)
+    parallelism: int = Field(default=1, ge=1)
+    completions: int = Field(default=1, ge=1)
+    active_deadline_seconds: int = Field(default=600, ge=1, le=86_400)
+    backoff_limit: int = Field(default=6, ge=0, le=100)
+    scaling_strategy: str = Field(default="default", description="default | custom | accurate")
+    triggers: list[TriggerSpec] = Field(min_length=1)
+    labels: dict[str, str] = Field(default_factory=dict)
+    annotations: dict[str, str] = Field(default_factory=dict)
+
+
+def render_scaled_job(spec: ScaledJobSpec) -> str:
+    """Render a ScaledJob as YAML."""
+    container_block: dict[str, Any] = {
+        "name": spec.container.name,
+        "image": spec.container.image,
+    }
+    if spec.container.command:
+        container_block["command"] = list(spec.container.command)
+    if spec.container.args:
+        container_block["args"] = list(spec.container.args)
+    if spec.container.env:
+        container_block["env"] = list(spec.container.env)
+
+    body: dict[str, Any] = {
+        "apiVersion": "keda.sh/v1alpha1",
+        "kind": "ScaledJob",
+        "metadata": {"name": spec.name, "namespace": spec.namespace},
+        "spec": {
+            "jobTargetRef": {
+                "parallelism": spec.parallelism,
+                "completions": spec.completions,
+                "activeDeadlineSeconds": spec.active_deadline_seconds,
+                "backoffLimit": spec.backoff_limit,
+                "template": {
+                    "spec": {
+                        "restartPolicy": "Never",
+                        "containers": [container_block],
+                    },
+                },
+            },
+            "pollingInterval": spec.polling_interval,
+            "maxReplicaCount": spec.max_replica_count,
+            "successfulJobsHistoryLimit": spec.successful_jobs_history_limit,
+            "failedJobsHistoryLimit": spec.failed_jobs_history_limit,
+            "scalingStrategy": {"strategy": spec.scaling_strategy},
+            "triggers": [t.model_dump(exclude_none=True) for t in spec.triggers],
+        },
+    }
+    if spec.labels:
+        body["metadata"]["labels"] = dict(spec.labels)
+    if spec.annotations:
+        body["metadata"]["annotations"] = dict(spec.annotations)
+    return str(yaml.safe_dump(body, sort_keys=False, default_flow_style=False))
+
+
 def render_scaled_object(spec: ScaledObjectSpec) -> str:
     """Render a ScaledObject as YAML, ready to apply or PR into a GitOps repo."""
     body: dict[str, Any] = {
@@ -129,6 +210,77 @@ def render_trigger_authentication(spec: TriggerAuthenticationSpec) -> str:
             "secrets": list(spec.vault_secrets),
         }
     return str(yaml.safe_dump(body, sort_keys=False, default_flow_style=False))
+
+
+# ── Azure Workload Identity bundle ───────────────────────────────
+class AzureWorkloadIdentityBundleSpec(BaseModel):
+    """All the YAML + CLI Kairos can hand the operator to wire up Azure WI.
+
+    KEDA 2.15+ removed pod-identity support. The replacement is Microsoft Entra
+    Workload Identity. The K8s side is a ServiceAccount + TriggerAuthentication;
+    the Azure side is a managed identity + a federated credential, which Kairos
+    can't create directly but can render the `az` CLI command for.
+    """
+
+    namespace: str = Field(min_length=1)
+    service_account_name: str = Field(min_length=1)
+    azure_client_id: str = Field(min_length=1, description="UAMI / app client UUID")
+    azure_tenant_id: str = Field(min_length=1)
+    trigger_auth_name: str = Field(min_length=1)
+    aks_oidc_issuer_url: str | None = Field(
+        default=None,
+        description="From `az aks show ... --query oidcIssuerProfile.issuerUrl`",
+    )
+    federated_credential_name: str = Field(default="kairos-keda")
+
+
+def render_azure_workload_identity_bundle(spec: AzureWorkloadIdentityBundleSpec) -> str:
+    """Render a multi-doc YAML containing ServiceAccount + TriggerAuthentication.
+
+    Includes inline comments showing the matching `az identity federated-credential
+    create` command the operator must run on the Azure side.
+    """
+    sa_doc = {
+        "apiVersion": "v1",
+        "kind": "ServiceAccount",
+        "metadata": {
+            "name": spec.service_account_name,
+            "namespace": spec.namespace,
+            "annotations": {
+                "azure.workload.identity/client-id": spec.azure_client_id,
+                "azure.workload.identity/tenant-id": spec.azure_tenant_id,
+            },
+            "labels": {"azure.workload.identity/use": "true"},
+        },
+    }
+    ta_doc = {
+        "apiVersion": "keda.sh/v1alpha1",
+        "kind": "TriggerAuthentication",
+        "metadata": {"name": spec.trigger_auth_name, "namespace": spec.namespace},
+        "spec": {
+            "podIdentity": {
+                "provider": "azure-workload",
+                "identityId": spec.azure_client_id,
+            },
+        },
+    }
+    sa_yaml = yaml.safe_dump(sa_doc, sort_keys=False, default_flow_style=False)
+    ta_yaml = yaml.safe_dump(ta_doc, sort_keys=False, default_flow_style=False)
+
+    issuer = spec.aks_oidc_issuer_url or "$(az aks show -g <rg> -n <cluster> --query oidcIssuerProfile.issuerUrl -o tsv)"
+    azure_cli = (
+        f"# Run on the Azure side (one-time; needs the AKS OIDC issuer URL).\n"
+        f"# az aks update -g <rg> -n <cluster> --enable-oidc-issuer --enable-workload-identity\n"
+        f"#\n"
+        f"# az identity federated-credential create \\\n"
+        f"#     --name {spec.federated_credential_name} \\\n"
+        f"#     --identity-name <uami-name> \\\n"
+        f"#     --resource-group <rg> \\\n"
+        f"#     --issuer {issuer} \\\n"
+        f"#     --subject system:serviceaccount:{spec.namespace}:{spec.service_account_name} \\\n"
+        f"#     --audience api://AzureADTokenExchange\n"
+    )
+    return f"{azure_cli}---\n{sa_yaml}---\n{ta_yaml}"
 
 
 # ── Model: HTTPScaledObject (HTTP add-on) ────────────────────────
