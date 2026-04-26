@@ -12,7 +12,9 @@ This package codifies the reference at docs/keda-reference.md so Kairos can:
 from kairos.keda.catalog import SCALERS, ScalerCategory, ScalerSpec, get_scaler
 from kairos.keda.generator import (
     AzureWorkloadIdentityBundleSpec,
+    HTTPConcurrencyMetric,
     HTTPScaledObjectSpec,
+    HTTPScalingMetric,
     JobContainerSpec,
     ScaledJobSpec,
     ScaledObjectSpec,
@@ -33,7 +35,9 @@ from kairos.keda.validator import (
 __all__ = [
     "SCALERS",
     "AzureWorkloadIdentityBundleSpec",
+    "HTTPConcurrencyMetric",
     "HTTPScaledObjectSpec",
+    "HTTPScalingMetric",
     "JobContainerSpec",
     "LintFinding",
     "ScaledJobSpec",

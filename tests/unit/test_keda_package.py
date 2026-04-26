@@ -370,3 +370,74 @@ def test_lint_http_low_target_value_warning() -> None:
     spec = _http_so(target_value=2)
     findings = lint_http_scaled_object(spec)
     assert any(f.code == "KEDA-202" and f.severity == "warning" for f in findings)
+
+
+# ── Round 2: external scaler ──────────────────────────────────────
+def test_external_scaler_in_catalog() -> None:
+    ext = get_scaler("external")
+    assert ext is not None
+    assert ext.name.startswith("External")
+    field_names = {f.name for f in ext.fields}
+    assert "scalerAddress" in field_names
+
+
+def test_render_scaled_object_with_external_trigger() -> None:
+    so = ScaledObjectSpec(
+        name="custom",
+        namespace="default",
+        target=ScaleTargetRef(name="myapp"),
+        max_replicas=5,
+        triggers=[
+            TriggerSpec(
+                type="external",
+                metadata={"scalerAddress": "my-scaler.default.svc:9090"},
+            )
+        ],
+    )
+    parsed = yaml.safe_load(render_scaled_object(so))
+    assert parsed["spec"]["triggers"][0]["type"] == "external"
+
+
+# ── Round 2: HTTP concurrency mode + responseHeaderTimeout lint ──
+def test_render_http_concurrency_mode() -> None:
+    from kairos.keda import HTTPConcurrencyMetric  # noqa: PLC0415
+
+    spec = HTTPScaledObjectSpec(
+        name="llm-scaler",
+        namespace="ml",
+        hosts=["llm.example.com"],
+        target=HTTPScaleTargetRef(name="llm", service="llm", port=8080),
+        max_replicas=20,
+        metric=None,
+        concurrency=HTTPConcurrencyMetric(target_value=4),
+    )
+    parsed = yaml.safe_load(render_http_scaled_object(spec))
+    sm = parsed["spec"]["scalingMetric"]
+    assert "concurrency" in sm
+    assert sm["concurrency"]["targetValue"] == 4
+    assert "requestRate" not in sm
+
+
+def test_render_http_with_response_header_timeout() -> None:
+    spec = _http_so()
+    spec.response_header_timeout_seconds = 60
+    parsed = yaml.safe_load(render_http_scaled_object(spec))
+    assert parsed["spec"]["responseHeaderTimeout"] == "60s"
+
+
+def test_lint_http_short_response_header_timeout() -> None:
+    spec = _http_so()
+    spec.response_header_timeout_seconds = 5
+    findings = lint_http_scaled_object(spec)
+    assert any(f.code == "KEDA-203" and f.severity == "warning" for f in findings)
+
+
+def test_lint_http_concurrency_with_zero_min_advisory() -> None:
+    from kairos.keda import HTTPConcurrencyMetric  # noqa: PLC0415
+
+    spec = _http_so()
+    spec.metric = None
+    spec.concurrency = HTTPConcurrencyMetric(target_value=4)
+    spec.min_replicas = 0
+    findings = lint_http_scaled_object(spec)
+    assert any(f.code == "KEDA-204" and f.severity == "info" for f in findings)

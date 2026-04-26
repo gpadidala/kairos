@@ -250,6 +250,25 @@ SCALERS: list[ScalerSpec] = [
         docs_url="https://keda.sh/docs/latest/scalers/cron/",
         notes=["Pair with a queue trigger to keep on-demand bursts handled outside business hours."],
     ),
+    # ── Custom / external ──────────────────────────────────────
+    ScalerSpec(
+        type="external",
+        name="External scaler (gRPC)",
+        category=ScalerCategory.OBSERVABILITY,
+        summary="Scale on a value reported by your own gRPC service implementing KEDA's External Scaler API.",
+        metric_meaning="Whatever metric your external scaler returns over the gRPC contract (custom domain logic).",
+        fields=[
+            ScalerField(name="scalerAddress", required=True, description="host:port of your gRPC scaler service", example="my-scaler.default.svc:9090"),
+            ScalerField(name="metricType", description="Value | AverageValue", example="AverageValue"),
+        ],
+        auth_modes=["secret", "none"],
+        docs_url="https://keda.sh/docs/latest/scalers/external/",
+        notes=[
+            "Use this when no built-in scaler fits your domain — e.g., scaling on a tenant-specific SaaS metric.",
+            "Implement the gRPC contract from kedacore/keda's GetMetricSpec / GetMetrics RPCs.",
+            "Pin both your scaler and KEDA versions; the contract is stable but your scaler is a SPOF for autoscaling.",
+        ],
+    ),
     # ── Resource (KEDA-managed CPU/memory) ─────────────────────
     ScalerSpec(
         type="cpu",

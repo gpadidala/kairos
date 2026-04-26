@@ -293,9 +293,26 @@ class HTTPScaleTargetRef(BaseModel):
 
 
 class HTTPScalingMetric(BaseModel):
+    """requestRate scaling — one of two modes the HTTP add-on supports.
+
+    Use this when traffic is throughput-shaped (req/sec). For long-tail or
+    streaming workloads where each request occupies a pod for a meaningful
+    duration, prefer ConcurrencyMetric instead.
+    """
+
     target_value: int = Field(default=100, ge=1)
     granularity: str = Field(default="1s")
     window: str = Field(default="1m")
+
+
+class HTTPConcurrencyMetric(BaseModel):
+    """Concurrency scaling — target N in-flight requests per pod.
+
+    Pick this for slow or streaming endpoints (LLM inference, large file
+    uploads, websocket-heavy APIs) where requestRate misrepresents load.
+    """
+
+    target_value: int = Field(default=10, ge=1, description="In-flight requests per pod")
 
 
 class HTTPScaledObjectSpec(BaseModel):
@@ -307,11 +324,41 @@ class HTTPScaledObjectSpec(BaseModel):
     min_replicas: int = Field(default=0, ge=0)
     max_replicas: int = Field(default=10, ge=1)
     scaledown_period: int = Field(default=300, ge=1)
-    metric: HTTPScalingMetric = Field(default_factory=HTTPScalingMetric)
+    metric: HTTPScalingMetric | None = Field(default_factory=HTTPScalingMetric)
+    concurrency: HTTPConcurrencyMetric | None = None
+    response_header_timeout_seconds: int | None = Field(
+        default=None,
+        description=(
+            "Interceptor responseHeaderTimeout — must exceed slowest legitimate "
+            "response (incl. cold-start) or users see 503/timeout."
+        ),
+    )
 
 
 def render_http_scaled_object(spec: HTTPScaledObjectSpec) -> str:
-    """Render an HTTPScaledObject (KEDA HTTP add-on) as YAML."""
+    """Render an HTTPScaledObject (KEDA HTTP add-on) as YAML.
+
+    Picks `concurrency` over `requestRate` when both are set — concurrency is
+    the more conservative metric for slow endpoints.
+    """
+    if spec.concurrency is not None:
+        scaling_metric: dict[str, Any] = {
+            "concurrency": {"targetValue": spec.concurrency.target_value},
+        }
+    elif spec.metric is not None:
+        scaling_metric = {
+            "requestRate": {
+                "granularity": spec.metric.granularity,
+                "targetValue": spec.metric.target_value,
+                "window": spec.metric.window,
+            },
+        }
+    else:
+        # Default to a sane requestRate if neither is provided
+        scaling_metric = {
+            "requestRate": {"granularity": "1s", "targetValue": 100, "window": "1m"},
+        }
+
     body: dict[str, Any] = {
         "apiVersion": "http.keda.sh/v1alpha1",
         "kind": "HTTPScaledObject",
@@ -322,15 +369,13 @@ def render_http_scaled_object(spec: HTTPScaledObjectSpec) -> str:
             "scaleTargetRef": spec.target.model_dump(),
             "replicas": {"min": spec.min_replicas, "max": spec.max_replicas},
             "scaledownPeriod": spec.scaledown_period,
-            "scalingMetric": {
-                "requestRate": {
-                    "granularity": spec.metric.granularity,
-                    "targetValue": spec.metric.target_value,
-                    "window": spec.metric.window,
-                },
-            },
+            "scalingMetric": scaling_metric,
         },
     }
+    if spec.response_header_timeout_seconds is not None:
+        body["spec"]["responseHeaderTimeout"] = (
+            f"{spec.response_header_timeout_seconds}s"
+        )
     return str(yaml.safe_dump(body, sort_keys=False, default_flow_style=False))
 
 

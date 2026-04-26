@@ -194,8 +194,8 @@ def lint_http_scaled_object(spec: HTTPScaledObjectSpec) -> list[LintFinding]:
             )
         )
 
-    # KEDA-202: very small targetValue tends to over-scale
-    if spec.metric.target_value <= 5:
+    # KEDA-202: very small targetValue tends to over-scale (requestRate only)
+    if spec.metric is not None and spec.metric.target_value <= 5:
         findings.append(
             LintFinding(
                 code="KEDA-202",
@@ -205,6 +205,40 @@ def lint_http_scaled_object(spec: HTTPScaledObjectSpec) -> list[LintFinding]:
                     "Per-pod target < 5 RPS often produces flapping during normal traffic dips."
                 ),
                 field="metric.target_value",
+            )
+        )
+
+    # KEDA-203: responseHeaderTimeout sanity for cold starts
+    if (
+        spec.response_header_timeout_seconds is not None
+        and spec.response_header_timeout_seconds < 20
+    ):
+        findings.append(
+            LintFinding(
+                code="KEDA-203",
+                severity="warning",
+                message=(
+                    f"responseHeaderTimeout={spec.response_header_timeout_seconds}s is short. "
+                    "Pod cold-starts plus the slowest legitimate response must fit inside this "
+                    "window or users see HTTP 503 / 'timeout awaiting response headers' during "
+                    "scale-from-zero. Default is 20s; raise to match your slowest endpoint."
+                ),
+                field="response_header_timeout_seconds",
+            )
+        )
+
+    # KEDA-204: scale-from-zero with concurrency mode is the right pick for slow paths
+    if spec.concurrency is not None and spec.min_replicas == 0:
+        findings.append(
+            LintFinding(
+                code="KEDA-204",
+                severity="info",
+                message=(
+                    "Concurrency mode + scale-to-zero is recommended for LLM inference, "
+                    "large file uploads, and websocket-heavy APIs where requestRate "
+                    "misrepresents load. Verify cold-start fits inside responseHeaderTimeout."
+                ),
+                field="concurrency",
             )
         )
     return findings
