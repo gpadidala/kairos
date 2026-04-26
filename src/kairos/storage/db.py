@@ -9,6 +9,7 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import datetime
+from typing import Any
 
 import structlog
 from sqlalchemy import JSON, DateTime, Float, Integer, String, Text
@@ -199,6 +200,7 @@ class Database:
     async def create_all(self) -> None:
         async with self._engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
+            await conn.run_sync(_apply_lightweight_migrations)
         log.info("audit_db_ready", url=str(self._engine.url).split("@")[-1])
 
     async def dispose(self) -> None:
@@ -208,3 +210,42 @@ class Database:
     async def session(self) -> AsyncIterator[AsyncSession]:
         async with self._sessionmaker() as s:
             yield s
+
+
+# ── Lightweight schema migrations ─────────────────────────────────────
+# Tracked here (rather than Alembic) because the upgrade surface is tiny and
+# the audit DB is operator-managed, not customer-shared. Each entry:
+#   (table, column_name, ddl_fragment_for_ALTER_TABLE_ADD_COLUMN)
+# Adding a row is the entire migration; older deployments pick it up on the
+# next bootstrap without operator intervention.
+_ADDITIVE_COLUMNS: list[tuple[str, str, str]] = [
+    ("environment_profiles", "cost_cpu_per_hour", "FLOAT"),
+    ("environment_profiles", "cost_mem_gib_per_hour", "FLOAT"),
+    ("environment_profiles", "cost_currency", "VARCHAR(8)"),
+]
+
+
+def _apply_lightweight_migrations(connection: Any) -> None:
+    """Idempotent ADD COLUMN migrations for additive schema changes.
+
+    Works for SQLite + Postgres. Failures (column already exists) are logged
+    at debug and swallowed — this runs every boot so it has to be re-entrant.
+    """
+    from sqlalchemy import inspect, text  # noqa: PLC0415
+
+    insp = inspect(connection)
+    if insp is None:
+        return
+    for table, column, ddl in _ADDITIVE_COLUMNS:
+        try:
+            existing = {c["name"] for c in insp.get_columns(table)}
+        except Exception as exc:  # pragma: no cover — table doesn't exist yet
+            log.debug("schema_migration_inspect_failed", table=table, error=str(exc))
+            continue
+        if column in existing:
+            continue
+        try:
+            connection.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {ddl}"))
+            log.info("schema_migration_applied", table=table, column=column)
+        except Exception as exc:
+            log.warning("schema_migration_failed", table=table, column=column, error=str(exc))
