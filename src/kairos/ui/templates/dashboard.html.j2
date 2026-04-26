@@ -39,283 +39,202 @@
   "acknowledged": "from-amber-400/40 to-orange-500/40",
 } -%}
 
-{# ── Hero + quick actions ───────────────────────────────────────── #}
-<div class="flex flex-col md:flex-row md:items-end md:justify-between gap-6 mb-10">
+{# ── Header — single primary CTA ──────────────────────────────── #}
+<header class="flex flex-col md:flex-row md:items-end md:justify-between mb-10" style="gap: var(--space-5);">
   <div>
-    <div class="flex items-center gap-2 text-xs uppercase tracking-widest text-white/45 mb-2">
-      <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.7)]"></span>
-      Predictive Capacity & Autoscaling Platform
+    <div class="t-eyebrow flex items-center gap-2" style="margin-bottom: var(--space-2);">
+      <span class="w-1.5 h-1.5 rounded-full" style="background: var(--success); box-shadow: 0 0 10px rgba(52,211,153,0.7);" aria-hidden="true"></span>
+      Overview · {{ settings.environment }}
     </div>
-    <h1 class="text-4xl font-bold tracking-tight mb-3">Kairos</h1>
-    <p class="text-base text-white/70 leading-relaxed max-w-3xl">
-      Augments KEDA with 48-hour CPU/memory forecasts. Predicts when a workload will need more capacity,
-      queues the change for human approval, and opens a GitOps PR. KEDA still handles the reactive
-      minute-by-minute scaling — Kairos handles the planning.
-    </p>
-    <p class="text-sm text-white/45 mt-2 mono">
-      {{ settings.environment }} ·
-      dry_run={{ settings.features.dry_run }} ·
-      require_ui_approval={{ settings.features.require_ui_approval }}
+    <h1 class="t-h1" style="margin: 0;">Activity</h1>
+    <p class="t-body" style="color: var(--fg-dim); max-width: 60ch; margin: var(--space-2) 0 0;">
+      Last 7 days at a glance. Trigger a run to refresh forecasts; jump into Pending to act on what needs review.
     </p>
   </div>
-  <div class="flex flex-wrap gap-2 shrink-0">
+  <div class="flex flex-wrap items-center" style="gap: var(--space-2);">
     <button
       hx-post="/api/v1/runs"
       hx-vals='{"dry_run": true}'
       hx-headers='{"Content-Type": "application/json"}'
       hx-swap="none"
       hx-on::after-request="setTimeout(()=>window.location.reload(),700)"
-      class="btn-glass btn-glass-success btn-glass-sm">
-      <svg viewBox="0 0 24 24" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 12l5 5L20 7"/></svg>
+      class="btn btn-primary">
+      <svg viewBox="0 0 24 24" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M5 12l5 5L20 7"/></svg>
       Trigger run
     </button>
-    <a href="/ui/pending" class="btn-glass btn-glass-sm">
-      <svg viewBox="0 0 24 24" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+    <a href="/ui/pending" class="btn btn-sm">
       Pending
       {% if counters.pending_approvals > 0 %}
-        <span class="ml-1 px-1.5 py-0.5 rounded-md bg-amber-400/30 text-amber-100 text-[10px] font-bold">{{ counters.pending_approvals }}</span>
+        <span class="num pill pill-warn" style="margin-left: var(--space-1); padding: 0 6px;" aria-label="{{ counters.pending_approvals }} pending">{{ counters.pending_approvals }}</span>
       {% endif %}
     </a>
-    <a href="/ui/alerts" class="btn-glass btn-glass-sm">
-      <svg viewBox="0 0 24 24" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M15 17h5l-1.4-1.4A2 2 0 0118 14.2V11a6 6 0 10-12 0v3.2c0 .5-.2 1-.6 1.4L4 17h5m6 0v1a3 3 0 11-6 0v-1"/></svg>
+    <a href="/ui/alerts" class="btn btn-sm">
       Alerts
       {% if (counters.alerts_firing or 0) > 0 %}
-        <span class="ml-1 px-1.5 py-0.5 rounded-md bg-rose-400/30 text-rose-100 text-[10px] font-bold">{{ counters.alerts_firing }}</span>
+        <span class="num pill pill-danger" style="margin-left: var(--space-1); padding: 0 6px;" aria-label="{{ counters.alerts_firing }} firing">{{ counters.alerts_firing }}</span>
       {% endif %}
     </a>
-    {% if grafana_url %}
-    <a href="{{ grafana_url }}" target="_blank" rel="noopener" class="btn-glass btn-glass-sm">
-      <svg viewBox="0 0 24 24" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M14 3h7v7M10 14L21 3M21 14v7h-7M3 10V3h7M3 10l11 11"/></svg>
-      Grafana
-    </a>
-    {% endif %}
-    {% if github_url %}
-    <a href="{{ github_url }}" target="_blank" rel="noopener" class="btn-glass btn-glass-sm">
-      <svg viewBox="0 0 24 24" class="w-3.5 h-3.5" fill="currentColor"><path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.91.57.1.78-.25.78-.55v-2.1c-3.2.7-3.87-1.36-3.87-1.36-.52-1.32-1.27-1.67-1.27-1.67-1.04-.71.08-.7.08-.7 1.15.08 1.76 1.18 1.76 1.18 1.02 1.75 2.69 1.25 3.34.95.1-.74.4-1.25.72-1.54-2.55-.29-5.24-1.27-5.24-5.66 0-1.25.45-2.27 1.18-3.07-.12-.29-.51-1.46.11-3.04 0 0 .96-.31 3.16 1.17.92-.26 1.9-.39 2.88-.39s1.96.13 2.88.39c2.2-1.48 3.16-1.17 3.16-1.17.62 1.58.23 2.75.11 3.04.74.8 1.18 1.82 1.18 3.07 0 4.4-2.69 5.36-5.25 5.65.41.36.78 1.06.78 2.14v3.17c0 .31.2.66.79.55C20.21 21.39 23.5 17.08 23.5 12 23.5 5.65 18.35.5 12 .5z"/></svg>
-      GitHub
-    </a>
-    {% endif %}
+    {% if grafana_url %}<a href="{{ grafana_url }}" target="_blank" rel="noopener" class="btn btn-sm" aria-label="Open Grafana (new tab)">Grafana</a>{% endif %}
   </div>
-</div>
+</header>
 
-{# ── Live activity (NEW) ─────────────────────────────────────────── #}
-<div class="flex items-center justify-between mb-4">
-  <h2 class="text-sm font-semibold uppercase tracking-widest text-white/55">Application activity · last 7 days</h2>
-  <a href="/ui/history" class="text-xs text-blue-300/80 hover:text-blue-200 underline-offset-4 hover:underline">View full history →</a>
-</div>
-<div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-12">
-
-  {# Decisions per day — SVG sparkline bars #}
-  <a href="/ui/history" class="glass p-5 hover:bg-white/[.07] transition-all group">
-    <div class="flex items-center justify-between mb-3">
-      <div>
-        <div class="text-[10px] uppercase tracking-widest text-white/45">Decisions per day</div>
-        <div class="text-2xl font-bold tracking-tight">{{ activity.decisions_per_day | sum(attribute='count') }}</div>
-      </div>
-      <svg viewBox="0 0 24 24" class="w-4 h-4 text-white/30 group-hover:text-white/60 transition-colors" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
-    </div>
-    {% set max_dec = (activity.decisions_per_day | map(attribute='count') | max) or 1 %}
-    <div class="flex items-end gap-1 h-20">
-      {% for d in activity.decisions_per_day %}
-      <div class="flex-1 flex flex-col items-center gap-1" title="{{ d.day }}: {{ d.count }}">
-        <div class="w-full rounded-sm bg-gradient-to-t from-blue-500/70 to-cyan-300/70"
-             style="height: {{ ((d.count / max_dec) * 100) if max_dec > 0 else 0 }}%; min-height: 2px;"></div>
-        <div class="text-[9px] text-white/40 mono">{{ d.day[5:] }}</div>
-      </div>
-      {% endfor %}
-    </div>
-  </a>
-
-  {# Decision actions breakdown — horizontal bars #}
-  <a href="/ui/history" class="glass p-5 hover:bg-white/[.07] transition-all group">
-    <div class="flex items-center justify-between mb-3">
-      <div>
-        <div class="text-[10px] uppercase tracking-widest text-white/45">Decision actions</div>
-        <div class="text-2xl font-bold tracking-tight">{{ activity.actions_breakdown | sum(attribute='count') }}</div>
-      </div>
-      <svg viewBox="0 0 24 24" class="w-4 h-4 text-white/30 group-hover:text-white/60 transition-colors" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
-    </div>
-    {% set max_act = (activity.actions_breakdown | map(attribute='count') | max) or 1 %}
-    <div class="space-y-1.5">
-      {% for a in activity.actions_breakdown[:5] %}
-      <div>
-        <div class="flex justify-between text-[10px] mb-0.5">
-          <span class="text-white/70">{{ action_labels.get(a.action, a.action) }}</span>
-          <span class="mono text-white/50">{{ a.count }}</span>
-        </div>
-        <div class="h-1.5 rounded-full bg-white/5 overflow-hidden">
-          <div class="h-full rounded-full bg-gradient-to-r {{ action_colors.get(a.action, 'from-slate-400/40 to-slate-500/40') }}"
-               style="width: {{ (a.count / max_act) * 100 }}%;"></div>
-        </div>
-      </div>
-      {% else %}
-      <div class="text-xs text-white/40 py-4 text-center">No decisions yet — trigger a run.</div>
-      {% endfor %}
-    </div>
-  </a>
-
-  {# Approvals + Alerts breakdown stacked #}
-  <div class="grid grid-rows-2 gap-4">
-    <a href="/ui/pending" class="glass p-4 hover:bg-white/[.07] transition-all group">
-      <div class="flex items-center justify-between mb-2">
-        <div class="text-[10px] uppercase tracking-widest text-white/45">Approvals by state</div>
-        <svg viewBox="0 0 24 24" class="w-3.5 h-3.5 text-white/30 group-hover:text-white/60 transition-colors" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
-      </div>
-      <div class="flex flex-wrap gap-1.5">
-        {% for a in activity.approvals_breakdown %}
-        <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-gradient-to-r {{ status_colors.get(a.status, 'from-slate-400/30 to-slate-500/30') }} ring-1 ring-white/15 text-[10px]">
-          <span class="text-white/85">{{ a.status }}</span>
-          <span class="mono font-bold text-white">{{ a.count }}</span>
-        </span>
-        {% else %}
-        <span class="text-xs text-white/40">No approval history yet.</span>
-        {% endfor %}
-      </div>
-    </a>
-    <a href="/ui/alerts" class="glass p-4 hover:bg-white/[.07] transition-all group">
-      <div class="flex items-center justify-between mb-2">
-        <div class="text-[10px] uppercase tracking-widest text-white/45">Alerts by state</div>
-        <svg viewBox="0 0 24 24" class="w-3.5 h-3.5 text-white/30 group-hover:text-white/60 transition-colors" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
-      </div>
-      <div class="flex flex-wrap gap-1.5">
-        {% for a in activity.alerts_breakdown %}
-        <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-gradient-to-r {{ alert_colors.get(a.state, 'from-slate-400/30 to-slate-500/30') }} ring-1 ring-white/15 text-[10px]">
-          <span class="text-white/85">{{ a.state }}</span>
-          <span class="mono font-bold text-white">{{ a.count }}</span>
-        </span>
-        {% else %}
-        <span class="text-xs text-white/40">No alerts yet — Grafana will route them here.</span>
-        {% endfor %}
-      </div>
-    </a>
-  </div>
-</div>
-
-{# ── Counters (clickable) ────────────────────────────────────────── #}
-<h2 class="text-sm font-semibold uppercase tracking-widest text-white/55 mb-4">Live snapshot · today</h2>
-<div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-12">
-  <a href="/ui/pending" class="glass p-4 hover:bg-white/[.08] transition-all group">
-    <div class="text-[11px] uppercase tracking-widest text-white/45 mb-1 flex items-center justify-between">
-      <span>Pending</span>
-      <svg viewBox="0 0 24 24" class="w-3 h-3 text-white/30 group-hover:text-white/60" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
-    </div>
-    <div class="text-2xl font-bold tracking-tight {% if counters.pending_approvals > 0 %}text-amber-300{% else %}text-white/60{% endif %}">{{ counters.pending_approvals }}</div>
-  </a>
-  <a href="/ui/history" class="glass p-4 hover:bg-white/[.08] transition-all group">
-    <div class="text-[11px] uppercase tracking-widest text-white/45 mb-1 flex items-center justify-between">
-      <span>Decisions today</span>
-      <svg viewBox="0 0 24 24" class="w-3 h-3 text-white/30 group-hover:text-white/60" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
-    </div>
-    <div class="text-2xl font-bold tracking-tight">{{ counters.decisions_today }}</div>
-  </a>
-  <a href="/ui/history" class="glass p-4 hover:bg-white/[.08] transition-all group">
-    <div class="text-[11px] uppercase tracking-widest text-white/45 mb-1 flex items-center justify-between">
-      <span>PRs today</span>
-      <svg viewBox="0 0 24 24" class="w-3 h-3 text-white/30 group-hover:text-white/60" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
-    </div>
-    <div class="text-2xl font-bold tracking-tight">{{ counters.prs_today }}</div>
-  </a>
-  <a href="/ui/alerts" class="glass p-4 hover:bg-white/[.08] transition-all group">
-    <div class="text-[11px] uppercase tracking-widest text-white/45 mb-1 flex items-center justify-between">
-      <span>Alerts (firing)</span>
-      <svg viewBox="0 0 24 24" class="w-3 h-3 text-white/30 group-hover:text-white/60" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
-    </div>
-    <div class="text-2xl font-bold tracking-tight {% if (counters.alerts_firing or 0) > 0 %}text-rose-300{% else %}text-white/60{% endif %}">{{ counters.alerts_firing or 0 }}</div>
-  </a>
-</div>
-
-{# ── Tool stack — clickable cards ────────────────────────────────── #}
-<h2 class="text-sm font-semibold uppercase tracking-widest text-white/55 mb-4">Tool stack</h2>
-<div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-12">
-  {% set tools = [
-    {"name": "KEDA",     "subtitle": "reactive autoscaler",      "color": "from-amber-400 to-orange-500",    "detail": "ScaledObjects watch event sources and scale Deployments/StatefulSets/DaemonSets in real time", "href": "/ui/keda",   "external": false, "label": "View KEDA panels"},
-    {"name": "Mimir",    "subtitle": "long-term TSDB",           "color": "from-indigo-400 to-fuchsia-500",  "detail": "Stores 14d+ of cluster metrics for Kairos's PromQL forecasting queries", "href": grafana_url ~ "/explore?orgId=1" if grafana_url else "https://grafana.com/oss/mimir/", "external": true, "label": "Open Explore"},
-    {"name": "Grafana",  "subtitle": "dashboards + alerting",    "color": "from-rose-400 to-pink-500",       "detail": "Visualizes predictions; routes alerts to Kairos via webhook contact point", "href": grafana_url if grafana_url else "https://grafana.com/", "external": true, "label": "Open Grafana"},
-    {"name": "Kairos",   "subtitle": "predictive control plane", "color": "from-blue-400 to-cyan-500",       "detail": "48h forecasts, decision rules R-001..R-008, approval queue, GitOps PR automation", "href": "/ui/workloads", "external": false, "label": "View workloads"},
-    {"name": "GitHub",   "subtitle": "GitOps source of truth",   "color": "from-slate-400 to-zinc-500",      "detail": "Receives auto-generated PRs editing replicas / requests / minReplicaCount", "href": github_url if github_url else "https://github.com/", "external": true, "label": "Open repo"},
-  ] %}
-  {% for t in tools %}
-  <a href="{{ t.href }}" {% if t.external %}target="_blank" rel="noopener"{% endif %} class="glass p-4 hover:bg-white/[.08] transition-all group block">
-    <div class="flex items-start justify-between mb-3">
-      <div class="w-9 h-9 rounded-xl bg-gradient-to-br {{ t.color }} grid place-items-center ring-1 ring-white/15"></div>
-      {% if t.external %}
-      <svg viewBox="0 0 24 24" class="w-3.5 h-3.5 text-white/30 group-hover:text-white/60" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M14 3h7v7M10 14L21 3"/></svg>
-      {% else %}
-      <svg viewBox="0 0 24 24" class="w-3.5 h-3.5 text-white/30 group-hover:text-white/60" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
-      {% endif %}
-    </div>
-    <div class="text-base font-semibold tracking-tight">{{ t.name }}</div>
-    <div class="text-[10px] uppercase tracking-widest text-white/45 mt-0.5">{{ t.subtitle }}</div>
-    <div class="text-[11px] text-white/55 mt-2 leading-snug">{{ t.detail }}</div>
-    <div class="text-[10px] text-blue-300/80 mt-3 group-hover:text-blue-200">{{ t.label }} →</div>
-  </a>
-  {% endfor %}
-</div>
-
-{# ── How it works (6-stage flow) — each stage clickable ──────────── #}
-<h2 class="text-sm font-semibold uppercase tracking-widest text-white/55 mb-4">How it works</h2>
-<div class="glass-strong p-6 mb-12">
-  <div class="grid grid-cols-1 md:grid-cols-6 gap-3">
-    {% set stages = [
-      {"n":1, "title":"Integrate", "body":"KEDA ScaledObjects on your Deployments / StatefulSets / DaemonSets. Alloy → Mimir ingestion. Grafana datasource provisioned. Kairos discovers workloads via static YAML or k8s API.", "icon":"M4 7l8-4 8 4M4 7v10l8 4 8-4V7M4 7l8 4 8-4M12 11v10", "href":"/ui/workloads"},
-      {"n":2, "title":"Predict",   "body":"Every 5–30 min Kairos pulls 14d of metrics from Mimir, runs Prophet (or statistical fallback), and produces a 48h forecast per workload + per metric.", "icon":"M3 12l2-2 4 4 8-8 4 4", "href":"/ui/keda"},
-      {"n":3, "title":"Decide",    "body":"Deterministic rules R-001..R-008 turn forecasts into ScalingDecisions: HORIZONTAL_UP / VERTICAL_UP / KEDA_PRESCALE / NOOP / HUMAN_APPROVAL_REQUIRED.", "icon":"M9 12l2 2 4-4M21 12c0 4.97-4.03 9-9 9s-9-4.03-9-9 4.03-9 9-9 9 4.03 9 9z", "href":"/ui/history"},
-      {"n":4, "title":"Alert",     "body":"Grafana evaluates Kairos-provisioned alert rules every 5 min. Firing alerts route through a webhook contact point back into Kairos UI plus email.", "icon":"M12 9v3.75m0 6.5h.008v.008H12v-.008zm-9.36-1.81a1.5 1.5 0 011.305-2.252h16.11a1.5 1.5 0 011.305 2.252l-8.055 13.96a1.5 1.5 0 01-2.61 0l-8.055-13.96z", "href":"/ui/alerts"},
-      {"n":5, "title":"Approve",   "body":"Human reviewer approves on /ui/pending. Kairos opens a GitOps PR editing replicas / cpu_request / mem_request. Reviewer merges; Argo CD applies.", "icon":"M5 13l4 4L19 7", "href":"/ui/pending"},
-      {"n":6, "title":"Resolve",   "body":"Once the change lands and load drops, Grafana auto-resolves the alert. Kairos receives the resolution webhook and marks the alert closed in /ui/alerts.", "icon":"M9 12h6M9 16h6M9 8h6M5 21h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v14a2 2 0 002 2z", "href":"/ui/history"},
+{# ── Snapshot counters ──────────────────────────────────────── #}
+<section aria-labelledby="snap-title" class="mb-12">
+  <h2 id="snap-title" class="t-eyebrow" style="margin-bottom: var(--space-4);">Live snapshot · today</h2>
+  <div class="grid grid-cols-2 md:grid-cols-4" style="gap: var(--space-4);">
+    {% set tiles = [
+      {"label":"Pending",          "value": counters.pending_approvals,    "href":"/ui/pending", "color": "amber" if counters.pending_approvals > 0 else "neutral"},
+      {"label":"Decisions today",  "value": counters.decisions_today,      "href":"/ui/history", "color":"neutral"},
+      {"label":"PRs today",        "value": counters.prs_today,            "href":"/ui/history", "color":"neutral"},
+      {"label":"Alerts firing",    "value": counters.alerts_firing or 0,   "href":"/ui/alerts",  "color": "rose" if (counters.alerts_firing or 0) > 0 else "neutral"},
     ] %}
-    {% for s in stages %}
-    <div class="relative">
-      <a href="{{ s.href }}" class="glass p-4 h-full block hover:bg-white/[.08] transition-all group">
-        <div class="flex items-center gap-2 mb-2">
-          <span class="w-7 h-7 rounded-lg bg-gradient-to-br from-blue-400/40 to-indigo-500/40 grid place-items-center text-xs font-bold text-white ring-1 ring-white/20">{{ s.n }}</span>
-          <span class="text-sm font-semibold tracking-tight">{{ s.title }}</span>
-          <svg viewBox="0 0 24 24" class="w-3 h-3 text-white/30 group-hover:text-white/60 ml-auto" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
-        </div>
-        <svg viewBox="0 0 24 24" class="w-5 h-5 text-blue-300/80 mb-2" fill="none" stroke="currentColor" stroke-width="1.8">
-          <path stroke-linecap="round" stroke-linejoin="round" d="{{ s.icon }}"/>
-        </svg>
-        <p class="text-[11px] text-white/65 leading-snug">{{ s.body }}</p>
-      </a>
-      {% if not loop.last %}
-      <svg class="hidden md:block absolute top-1/2 -right-2 -translate-y-1/2 z-10 w-4 h-4 text-white/30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/>
-      </svg>
-      {% endif %}
-    </div>
+    {% for t in tiles %}
+    <a href="{{ t.href }}" class="glass block" style="padding: var(--space-4); text-decoration: none; color: inherit;">
+      <div class="t-eyebrow flex items-center justify-between" style="margin-bottom: var(--space-2);">
+        <span>{{ t.label }}</span>
+        <svg viewBox="0 0 24 24" class="w-3 h-3" style="color: var(--fg-faint);" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
+      </div>
+      <div class="num"
+           style="font-size: var(--text-xl); font-weight: 700; line-height: 1; letter-spacing: -0.04em;
+                  color: {% if t.color == 'amber' %}var(--warn-fg){% elif t.color == 'rose' %}var(--danger-fg){% else %}var(--fg){% endif %};">
+        {{ t.value }}
+      </div>
+    </a>
     {% endfor %}
   </div>
-</div>
+</section>
 
-{# ── Recent runs ─────────────────────────────────────────────────── #}
-<div class="flex items-center justify-between mb-3">
-  <h2 class="text-sm font-semibold uppercase tracking-widest text-white/55">Recent pipeline runs</h2>
-  <a href="/ui/history" class="text-xs text-blue-300/80 hover:text-blue-200 underline-offset-4 hover:underline">View all →</a>
-</div>
-<div class="glass overflow-hidden">
-  <table class="glass-table">
-    <thead><tr><th>Run</th><th>Status</th><th class="text-right">Workloads</th><th>Started</th><th>Ended</th></tr></thead>
-    <tbody>
-      {% for r in recent_runs %}
-      <tr class="hover:bg-white/[.04] cursor-pointer" onclick="window.location='/ui/history'">
-        <td class="mono text-xs text-white/70">{{ r.id[:8] }}…</td>
-        <td>
-          <span class="pill {% if r.status == 'succeeded' %}pill-success{% elif r.status == 'partial' %}pill-warn{% elif r.status == 'failed' %}pill-danger{% else %}pill-info{% endif %}">
-            <span class="w-1.5 h-1.5 rounded-full bg-current opacity-70"></span>
-            {{ r.status }}
+{# ── Activity (7-day) ──────────────────────────────────────── #}
+<section aria-labelledby="activity-title" class="mb-12">
+  <div class="flex items-center justify-between" style="margin-bottom: var(--space-4);">
+    <h2 id="activity-title" class="t-eyebrow" style="margin: 0;">Application activity · last 7 days</h2>
+    <a href="/ui/history" class="t-body-sm" style="color: var(--brand);">View full history →</a>
+  </div>
+  <div class="grid grid-cols-1 lg:grid-cols-3" style="gap: var(--space-4);">
+    {# Decisions per day #}
+    {% set max_dec = (activity.decisions_per_day | map(attribute='count') | max) or 1 %}
+    {% set total_dec = activity.decisions_per_day | sum(attribute='count') %}
+    <a href="/ui/history" class="glass block" style="padding: var(--space-5); text-decoration: none; color: inherit;"
+       aria-label="Decisions per day chart, {{ total_dec }} total over the last 7 days">
+      <div class="t-eyebrow" style="margin-bottom: var(--space-1);">Decisions per day</div>
+      <div class="num" style="font-size: var(--text-xl); font-weight: 700; line-height: 1; margin-bottom: var(--space-3);">{{ total_dec }}</div>
+      <div class="flex items-end" style="gap: 4px; height: 80px;" role="img"
+           aria-label="Bar chart, {{ activity.decisions_per_day | length }} days">
+        {% for d in activity.decisions_per_day %}
+        <div class="flex-1 flex flex-col items-center" style="gap: 4px;" title="{{ d.day }}: {{ d.count }} decisions">
+          <div style="width: 100%; min-height: 2px; border-radius: 3px 3px 0 0;
+                      background: linear-gradient(180deg, rgba(34,211,238,0.85), rgba(96,165,250,0.55));
+                      height: {{ ((d.count / max_dec) * 100) if max_dec > 0 else 0 }}%;"></div>
+          <div class="num" style="font-size: 10px; color: var(--fg-faint);">{{ d.day[5:] }}</div>
+        </div>
+        {% endfor %}
+      </div>
+    </a>
+
+    {# Decision actions breakdown — horizontal bars #}
+    {% set max_act = (activity.actions_breakdown | map(attribute='count') | max) or 1 %}
+    {% set total_act = activity.actions_breakdown | sum(attribute='count') %}
+    <a href="/ui/history" class="glass block" style="padding: var(--space-5); text-decoration: none; color: inherit;"
+       aria-label="Decision actions breakdown, {{ total_act }} total">
+      <div class="t-eyebrow" style="margin-bottom: var(--space-1);">Decision actions</div>
+      <div class="num" style="font-size: var(--text-xl); font-weight: 700; line-height: 1; margin-bottom: var(--space-3);">{{ total_act }}</div>
+      <div class="space-y-2">
+        {% for a in activity.actions_breakdown[:5] %}
+        <div>
+          <div class="flex items-baseline justify-between" style="margin-bottom: 4px;">
+            <span class="t-body-sm">{{ action_labels.get(a.action, a.action) }}</span>
+            <span class="num t-caption">{{ a.count }}</span>
+          </div>
+          <div style="height: 6px; border-radius: 4px; background: rgba(255,255,255,0.05); overflow: hidden;">
+            <div style="height: 100%; border-radius: 4px;
+                        background: linear-gradient(90deg, rgba(96,165,250,0.55), rgba(34,211,238,0.85));
+                        width: {{ (a.count / max_act) * 100 }}%;"></div>
+          </div>
+        </div>
+        {% else %}
+        <div class="t-body-sm" style="color: var(--fg-faint); padding: var(--space-4) 0; text-align: center;">No decisions yet — trigger a run.</div>
+        {% endfor %}
+      </div>
+    </a>
+
+    {# State breakdowns stacked #}
+    <div class="grid grid-rows-2" style="gap: var(--space-4);">
+      <a href="/ui/pending" class="glass block" style="padding: var(--space-4); text-decoration: none; color: inherit;">
+        <div class="t-eyebrow flex items-center justify-between" style="margin-bottom: var(--space-2);">
+          <span>Approvals by state</span>
+          <svg viewBox="0 0 24 24" class="w-3 h-3" style="color: var(--fg-faint);" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
+        </div>
+        <div class="flex flex-wrap" style="gap: 6px;">
+          {% for a in activity.approvals_breakdown %}
+          <span class="num" style="display: inline-flex; align-items: center; gap: 6px;
+                                    padding: 2px 8px; border-radius: var(--radius-sm);
+                                    background: linear-gradient(90deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02));
+                                    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.10);
+                                    font-size: var(--text-xs);">
+            <span style="color: var(--fg-dim);">{{ a.status }}</span>
+            <strong>{{ a.count }}</strong>
           </span>
-        </td>
-        <td class="text-right mono text-xs">{{ r.workloads_processed }}</td>
-        <td class="mono text-xs text-white/60">{{ r.started_at.strftime('%Y-%m-%d %H:%M') }}</td>
-        <td class="mono text-xs text-white/60">{{ r.ended_at.strftime('%H:%M:%S') if r.ended_at else '—' }}</td>
-      </tr>
-      {% else %}
-      <tr><td colspan="5" class="text-center py-12 text-white/40">
-        <div class="text-sm">No runs yet — use “Trigger run” above.</div>
-        <div class="text-xs mt-1 mono text-white/30">POST /api/v1/runs</div>
-      </td></tr>
-      {% endfor %}
-    </tbody>
-  </table>
-</div>
+          {% else %}
+          <span class="t-caption">No approval history yet.</span>
+          {% endfor %}
+        </div>
+      </a>
+      <a href="/ui/alerts" class="glass block" style="padding: var(--space-4); text-decoration: none; color: inherit;">
+        <div class="t-eyebrow flex items-center justify-between" style="margin-bottom: var(--space-2);">
+          <span>Alerts by state</span>
+          <svg viewBox="0 0 24 24" class="w-3 h-3" style="color: var(--fg-faint);" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
+        </div>
+        <div class="flex flex-wrap" style="gap: 6px;">
+          {% for a in activity.alerts_breakdown %}
+          <span class="num" style="display: inline-flex; align-items: center; gap: 6px;
+                                    padding: 2px 8px; border-radius: var(--radius-sm);
+                                    background: linear-gradient(90deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02));
+                                    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.10);
+                                    font-size: var(--text-xs);">
+            <span style="color: var(--fg-dim);">{{ a.state }}</span>
+            <strong>{{ a.count }}</strong>
+          </span>
+          {% else %}
+          <span class="t-caption">No alerts yet — Grafana will route them here.</span>
+          {% endfor %}
+        </div>
+      </a>
+    </div>
+  </div>
+</section>
+
+{# ── Recent runs ──────────────────────────────────────────── #}
+<section aria-labelledby="runs-title">
+  <div class="flex items-center justify-between" style="margin-bottom: var(--space-3);">
+    <h2 id="runs-title" class="t-eyebrow" style="margin: 0;">Recent pipeline runs</h2>
+    <a href="/ui/history" class="t-body-sm" style="color: var(--brand);">View all →</a>
+  </div>
+  <div class="glass" style="overflow: hidden;">
+    <table class="glass-table">
+      <thead><tr><th>Run</th><th>Status</th><th class="text-right">Workloads</th><th>Started</th><th>Ended</th></tr></thead>
+      <tbody>
+        {% for r in recent_runs %}
+        <tr style="cursor: pointer;" onclick="window.location='/ui/history'">
+          <td class="mono t-caption">{{ r.id[:8] }}…</td>
+          <td>
+            <span class="pill {% if r.status == 'succeeded' %}pill-success{% elif r.status == 'partial' %}pill-warn{% elif r.status == 'failed' %}pill-danger{% else %}pill-info{% endif %}">
+              <span class="w-1.5 h-1.5 rounded-full" style="background: currentColor; opacity: 0.7;" aria-hidden="true"></span>
+              {{ r.status }}
+            </span>
+          </td>
+          <td class="text-right num mono t-caption">{{ r.workloads_processed }}</td>
+          <td class="mono t-caption">{{ r.started_at.strftime('%Y-%m-%d %H:%M') }}</td>
+          <td class="mono t-caption">{{ r.ended_at.strftime('%H:%M:%S') if r.ended_at else '—' }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5" style="text-align: center; padding: var(--space-7) var(--space-4); color: var(--fg-faint);">
+          <div class="t-body">No runs yet — use &ldquo;Trigger run&rdquo; above.</div>
+          <div class="t-caption mono" style="margin-top: var(--space-1);">POST /api/v1/runs</div>
+        </td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
 {% endblock %}

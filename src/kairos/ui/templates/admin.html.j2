@@ -18,20 +18,20 @@
 {% endmacro %}
 
 {# ── Hero ─────────────────────────────────────────────────────────── #}
-<div class="mb-8">
-  <h1 class="text-3xl font-bold tracking-tight mb-1">Admin</h1>
-  <p class="text-sm text-white/65 max-w-3xl">
+<header style="margin-bottom: var(--space-6);">
+  <h1 class="t-h1" style="margin: 0;">Admin</h1>
+  <p class="t-body" style="color: var(--fg-dim); margin: var(--space-2) 0 0; max-width: 64ch;">
     Connection setup and live configuration. Create one <em>environment profile</em> per environment
     (dev / staging / prod / DR) and activate it to hot-reload the Grafana + GitHub clients without a
     restart. Empty profile fields fall through to the env-var defaults.
   </p>
-</div>
+</header>
 
 {# ── Environment profiles ───────────────────────────────────────── #}
-<div class="flex items-center justify-between mb-4">
-  <h2 class="text-sm font-semibold uppercase tracking-widest text-white/55">Environment profiles</h2>
-  <a href="/ui/admin/envs/new" class="btn-glass btn-glass-sm btn-glass-success">
-    <svg viewBox="0 0 24 24" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 5v14m-7-7h14"/></svg>
+<div class="flex items-center justify-between" style="margin-bottom: var(--space-4);">
+  <h2 class="t-eyebrow" style="margin: 0;">Environment profiles</h2>
+  <a href="/ui/admin/envs/new" class="btn btn-success btn-sm">
+    <svg viewBox="0 0 24 24" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 5v14m-7-7h14"/></svg>
     New profile
   </a>
 </div>
@@ -95,7 +95,7 @@
 
 {# ── Connections ────────────────────────────────────────────────── #}
 <div class="flex items-center justify-between mb-4">
-  <h2 class="text-sm font-semibold uppercase tracking-widest text-white/55">Connections (active config)</h2>
+  <h2 class="t-eyebrow">Connections (active config)</h2>
   {% if active_profile %}
     <span class="text-xs text-white/55">resolved from profile <span class="mono text-emerald-300">{{ active_profile.name }}</span></span>
   {% else %}
