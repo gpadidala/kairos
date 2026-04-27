@@ -1,161 +1,323 @@
-# KEDA Integration
+# KEDA Integration — End-to-end Validation
 
-KAIROS and [KEDA](https://keda.sh) are designed to live side-by-side. KEDA reacts to events; KAIROS looks 48 hours ahead and proposes the configuration changes a human reviewer should approve.
+How Kairos integrates with a real KEDA deployment, and how to prove the
+predicted-scale-then-react cycle works on your cluster.
 
-This document maps every external reference operators tend to ask about onto specific KAIROS integration points.
-
----
-
-## TL;DR — what KAIROS knows about KEDA
-
-| KEDA metric | KAIROS query | Used by |
-|---|---|---|
-| `keda_scaler_metrics_value` | `KEDA_METRIC_VALUE` | KedaCollector → R-005 prescale rule |
-| `keda_scaler_active` | `KEDA_SCALER_ACTIVE` | UI scale-event timeline |
-| `keda_scaler_errors_total` | `KEDA_SCALER_ERRORS_TOTAL` / `KEDA_SCALER_ERRORS_RATE_5M` | UI scaler health · suppresses confidence on errored scalers |
-| `keda_scaler_metrics_latency_seconds` | `KEDA_SCALER_LATENCY_SECONDS` (p95) | UI scaler health |
-| `keda_scaled_object_errors_total` | `KEDA_SCALED_OBJECT_ERRORS_TOTAL` | UI per-ScaledObject health |
-| `keda_internal_scale_loop_latency_seconds` | `KEDA_INTERNAL_LOOP_LATENCY` (p95) | UI fleet view |
-| `keda_resource_registered_total` | `KEDA_RESOURCE_REGISTERED` | Fleet inventory |
-| `keda_build_info` | `KEDA_BUILD_INFO` | Compatibility check |
-
-A composite **scaler health** query (`KEDA_SCALER_HEALTH`) returns 1 when the scaler is active **and** has had zero error rate in the last 5 minutes — used by future R-009 to dampen KAIROS's confidence when a trigger is misbehaving.
-
-All queries live in [`src/kairos/collectors/promql_library.py`](../src/kairos/collectors/promql_library.py) — no PromQL strings exist outside that module.
+This is the validation doc. For the encyclopedic scaler / auth / HTTP-add-on
+reference, see [keda-reference.md](keda-reference.md).
 
 ---
 
-## Reference map
+## Table of contents
 
-### 1. [keda.sh — official site](https://keda.sh/)
+1. [Topology](#topology)
+2. [Install KEDA next to Kairos](#install-keda-next-to-kairos)
+3. [Annotate a workload](#annotate-a-workload)
+4. [Generate the ScaledObject](#generate-the-scaledobject)
+5. [Apply through GitOps](#apply-through-gitops)
+6. [Validate scale-to-zero and back](#validate-scale-to-zero-and-back)
+7. [Validate the alert webhook loop](#validate-the-alert-webhook-loop)
+8. [Validate the cost engine](#validate-the-cost-engine)
+9. [Validate Grafana alerts + Mimir recording rules](#validate-grafana-alerts--mimir-recording-rules)
+10. [Troubleshooting](#troubleshooting)
 
-Foundational. KEDA's docs are the source of truth for which metrics the operator emits and what each scaler produces. KAIROS's `promql_library.py` matches the metric names from [https://keda.sh/docs/latest/integrations/prometheus/](https://keda.sh/docs/latest/integrations/prometheus/) one-for-one.
+---
 
-If KEDA renames a metric in a future minor version, the breaking surface in KAIROS is just one file.
+## Topology
 
-### 2. [Grafana dashboard 23951 — KEDA / ScaledObject](https://grafana.com/grafana/dashboards/23951-kubernetes-autoscaling-keda-scaled-object/)
+```
+┌──────────────────── cluster ─────────────────────┐
+│                                                   │
+│   ┌────────────┐         ┌────────────────────┐   │
+│   │ workloads  │◄───────►│  KEDA operator     │   │
+│   │ (deploys)  │         │  + metrics adapter │   │
+│   └─────┬──────┘         └─────┬──────────────┘   │
+│         │                       │ external        │
+│         │ scrape                │ metrics         │
+│         ▼                       ▼                 │
+│   ┌────────────┐         ┌────────────────────┐   │
+│   │ Alloy /    │         │  HPA               │   │
+│   │ OTel       │         └────────────────────┘   │
+│   └─────┬──────┘                                   │
+│         │                                          │
+└─────────┼──────────────────────────────────────────┘
+          │ remote-write
+          ▼
+   ┌────────────┐    ┌──────────┐    ┌────────────┐
+   │  Mimir     │◄───┤ Grafana  │───►│   Kairos   │
+   │  (TSDB)    │    │ (alerts +│    │ /api/v1/.. │
+   └────────────┘    │  dashb.) │    │            │
+                     └──────────┘    └─────┬──────┘
+                                           │ approved
+                                           ▼
+                                    ┌─────────────┐
+                                    │  GitHub PR  │
+                                    └─────────────┘
+                                           │ merge
+                                           ▼
+                                    ┌─────────────┐
+                                    │  Argo CD /  │
+                                    │  Flux       │
+                                    └─────────────┘
+```
 
-The community-canonical KEDA view. Bundled in the KAIROS demo Grafana under the **KAIROS** folder as **"KEDA / ScaledObject (community)"** (uid `keda-23951`). Datasource UID is patched to `mimir` so it works with the bundled stack out of the box.
+Kairos and KEDA never talk directly. They communicate through:
 
-Look at this dashboard alongside `/ui/keda` — KAIROS's UI gives you the actionable summary (24h replica deltas, node-pool churn, predicted decisions); the Grafana dashboard gives you the deep-dive per-scaler timeline.
+1. **Mimir** — Kairos reads, KEDA's Prometheus scaler reads, both push.
+2. **GitOps** — Kairos opens PRs; on merge, KEDA picks up the new ScaledObject.
+3. **Grafana** — Kairos provisions dashboards + alert rules; the alert
+   contact point posts back to Kairos at `/api/v1/alerts/webhook`.
 
-### 3. [Practical KEDA guide (Medium)](https://medium.com/@digitalpower/kubernetes-based-event-driven-autoscaling-with-keda-a-practical-guide-ed29cf482e7b)
+This decoupling is intentional: Kairos plans, KEDA reacts. Either can be
+upgraded independently.
 
-A good "first day with KEDA" walkthrough. Aligns with what KAIROS expects: KEDA installed, ScaledObjects pointing at Deployments, scaler types you've probably picked (Kafka / RabbitMQ / Prometheus / SQS).
+---
 
-KAIROS's R-005 (KEDA_PRESCALE) only fires when a workload has a `kairos.io/keda-scaledobject` annotation set — see [`examples/manifests/deployment-jvm.yaml`](../examples/manifests/deployment-jvm.yaml) for the exact pattern.
+## Install KEDA next to Kairos
 
-### 4. [GKE — KEDA scale-to-zero tutorial](https://docs.cloud.google.com/kubernetes-engine/docs/tutorials/scale-to-zero-using-keda)
-
-Highlights `minReplicaCount: 0`. KAIROS **does not** propose scale-to-zero by default — the R-008 (HORIZONTAL_DOWN) rule is gated by `min_replicas_floor` (default 1).
-
-If you want scale-to-zero behavior:
-1. Let KEDA handle the activation/deactivation (it's much faster than a 30-minute KAIROS cycle).
-2. Set `KAIROS_DECISION__MIN_REPLICAS_FLOOR=0` in your env if you want KAIROS to propose it too.
-
-KAIROS's value-add over KEDA's own scale-to-zero is the *prediction* — proposing "bump `minReplicaCount` from 0 to 2 between 09:00–10:00 because last 14 days show predictable Monday morning load."
-
-### 5. [Dash0 — Observable event-driven autoscaling with KEDA + OpenTelemetry](https://www.dash0.com/blog/observable-event-driven-autoscaling-with-keda-opentelemetry-and-dash0)
-
-The post argues that KEDA scaling decisions should themselves be observable — exactly KAIROS's stance. KAIROS exposes:
-
-- 11 `kairos_*` Prometheus metrics including `kairos_decisions_total{action,severity}` and `kairos_circuit_breaker_state{service="mimir|github|grafana|llm_*"}`
-- OpenTelemetry spans wrapping every pipeline phase + every external call (set `KAIROS_TRACING__ENABLED=true` + `KAIROS_TRACING__OTLP_ENDPOINT`)
-- Structured JSON logs via `structlog` with correlation IDs across the discover → forecast → decide → act chain
-
-Together this means KEDA's scaling actions (in Dash0 / your OTel backend) and KAIROS's predicted recommendations (also in OTel) appear in the same trace tree.
-
-### 6. [AWS — KEDA + Amazon Managed Service for Prometheus](https://aws.amazon.com/blogs/mt/autoscaling-kubernetes-workloads-with-keda-using-amazon-managed-service-for-prometheus-metrics/)
-
-Same pattern as KAIROS's bundled stack, just with AMP swapped in for Mimir. To point KAIROS at AMP instead of bundled Mimir:
+### AKS managed add-on (recommended)
 
 ```bash
-# In deploy/docker-compose/.env
-KAIROS_MIMIR_URL=https://aps-workspaces.us-west-2.amazonaws.com/workspaces/ws-XXXX/api/v1
-KAIROS_MIMIR_ORG_ID=
-# Drop the SigV4-signing bearer token into .secrets/mimir-bearer
+az aks update -g <rg> -n <cluster> \
+    --enable-keda \
+    --enable-oidc-issuer \
+    --enable-workload-identity
 ```
 
-Note: AMP requires SigV4 signing. KAIROS's `MimirClient` only supports plain bearer tokens today — a sidecar proxy (`aws-sigv4-proxy`) is the easiest path. This is on the roadmap (multi-auth Mimir client).
+The add-on tracks the AKS-supported KEDA minor version. AKS 1.31 starts
+shipping KEDA 2.15+, which removes the legacy `aad-pod-identity` provider —
+use Workload Identity going forward (Kairos generates the bundle for you,
+see below).
 
-### 7. [PredictKube scaler — KEDA's own ML-based predictor](https://keda.sh/blog/2022-02-09-predictkube-scaler/)
+### EKS / GKE / OpenShift / self-managed
 
-This is the most relevant of the seven. Side-by-side comparison:
+```bash
+helm repo add kedacore https://kedacore.github.io/charts
+helm repo update
+helm install keda kedacore/keda \
+    --namespace keda --create-namespace --version 2.19.0
+```
 
-| Concern | PredictKube scaler (KEDA built-in) | KAIROS |
-|---|---|---|
-| Where it runs | Inside KEDA, per-trigger | External control plane (FastAPI service) |
-| Horizon | Reactive — responds to a 1–10 min prediction window | 48-hour horizon |
-| Decision unit | Adjusts `currentMetricValue` that feeds HPA replica count | Proposes `replicas`, `cpu_request`, `mem_request`, `minReplicaCount` edits |
-| Action | KEDA scales the workload immediately | KAIROS opens a GitOps PR; humans approve; Argo applies |
-| Models | Proprietary (Dysnix-hosted ML API) | Prophet + statistical fallback (open source, runs locally) |
-| Approval | None — scaler decides autonomously | UI approval required by default |
-| Audit trail | KEDA scaler logs | Full audit DB (SQLite/Postgres) + queryable history page |
-| Cost | API calls to Dysnix | Free (local Prophet/statsmodels) |
-| Best for | Online traffic with strong short-horizon patterns | Capacity planning + workloads where "wait, why are we scaling?" matters |
+Production-tuned values: see [keda-reference.md §Installation Option 3](keda-reference.md#installation).
 
-**They're complementary.** A typical setup:
+### Verify
 
-1. **PredictKube scaler** on the workload → handles minute-by-minute reactive scaling inside KEDA's normal control loop.
-2. **KAIROS** observing the same workload → forecasts 48h ahead, proposes adjustments to `minReplicaCount` / `maxReplicaCount` / requests so PredictKube has correct guard-rails for the predicted load.
+```bash
+kubectl -n keda get pods
+# keda-operator-...                  Running
+# keda-operator-metrics-apiserver-.. Running
+# keda-admission-webhooks-...        Running
 
-Concrete example: PredictKube ramps replicas from 5 → 22 every Thursday afternoon. KAIROS sees this pattern, proposes a Thursday-only PR bumping `minReplicaCount` from 2 to 8 ahead of the peak so first-replica cold-start latency disappears. Reviewer approves Wednesday night; KEDA + PredictKube run with the better minimum starting Thursday.
+kubectl get apiservice v1beta1.external.metrics.k8s.io
+# Should show keda-operator-metrics-apiserver as the only provider.
+```
 
 ---
 
-## Per-application KEDA queries
+## Annotate a workload
 
-When wiring a real workload into KAIROS, the annotations KAIROS looks for are:
+Add one of the auto-detection annotations to your Deployment / StatefulSet /
+DaemonSet:
 
 ```yaml
+apiVersion: apps/v1
+kind: Deployment
 metadata:
+  name: orders-consumer
+  namespace: workers
   annotations:
-    kairos.io/gitops-path: "apps/payments-api"        # required for PR creation
-    kairos.io/runtime: "jvm"                           # influences runtime-specific PromQL
-    kairos.io/keda-scaledobject: "payments-api-scaler" # enables KEDA queries for this workload
+    # Multi-tenancy (bubbles up everywhere)
+    kairos.io/portfolio: commerce
+    kairos.io/program: checkout
+    kairos.io/team: payments-platform
+    kairos.io/app-code: CKT-014
+
+    # KEDA trigger auto-detection
+    kairos.io/kafka-topic: orders
+    kairos.io/kafka-consumer-group: orders-svc
+    kairos.io/kafka-bootstrap: kafka.kafka.svc:9092
+    kairos.io/kafka-lag-threshold: "100"
+spec:
+  replicas: 0    # KEDA will manage this
+  ...
 ```
 
-KAIROS then derives these per-app queries automatically:
+Recognized annotations:
 
-```promql
-# Current trigger value (e.g. Kafka lag)
-max(keda_scaler_metrics_value{namespace="prod",scaledobject="payments-api-scaler"})
-
-# Active (1) when crossed the activation threshold, 0 otherwise
-max(keda_scaler_active{namespace="prod",scaledobject="payments-api-scaler"})
-
-# 5m error rate — non-zero suppresses KAIROS's confidence
-sum by (namespace, scaledobject) (rate(keda_scaler_errors_total[5m]))
-
-# p95 metric-fetch latency
-histogram_quantile(0.95,
-  sum by (le, namespace, scaledobject) (
-    rate(keda_scaler_metrics_latency_seconds_bucket{namespace="prod"}[5m])
-  ))
-
-# Composite "healthy" — active AND zero recent errors
-(max by (namespace, scaledobject) (
-  keda_scaler_active{namespace="prod",scaledobject="payments-api-scaler"}
-) == 1)
-and on(namespace, scaledobject)
-(sum by (namespace, scaledobject) (rate(keda_scaler_errors_total[5m])) == 0)
-```
-
-You can render these from Python via:
-
-```python
-from kairos.collectors.promql_library import PromQLLibrary, QueryName
-PromQLLibrary.render(
-    QueryName.KEDA_SCALER_HEALTH,
-    namespace="prod",
-    scaledobject="payments-api-scaler",
-)
-```
+| Annotation | Trigger type |
+|---|---|
+| `kairos.io/kafka-topic` | `kafka` |
+| `kairos.io/rabbitmq-queue` | `rabbitmq` |
+| `kairos.io/sqs-queue-url` | `aws-sqs-queue` |
+| `kairos.io/prometheus-query` | `prometheus` |
+| `kairos.io/keda-trigger-type` | explicit override (any of the 14 priority scalers) |
 
 ---
 
-## See also
+## Generate the ScaledObject
 
-- [`examples/keda/scaledobject.yaml`](../examples/keda/scaledobject.yaml) — example ScaledObject with KAIROS annotations
-- [`examples/promql/queries.md`](../examples/promql/queries.md) — every PromQL query KAIROS issues, with rationale
-- [ADR-0005](./adr/0005-redis-dedup-strategy.md) — how KAIROS avoids opening duplicate PRs when the same KEDA-driven scaling pattern repeats
+Kairos previews the YAML on the workload detail page and via the API:
+
+```bash
+curl 'http://localhost:8090/api/v1/keda/scaledobject/preview?workload_uid=Deployment/workers/orders-consumer'
+```
+
+Sample response (abridged):
+
+```json
+{
+  "yaml": "apiVersion: keda.sh/v1alpha1\nkind: ScaledObject\nmetadata:\n  name: orders-consumer-scaler\n  namespace: workers\nspec:\n  scaleTargetRef:\n    name: orders-consumer\n  triggers:\n  - type: kafka\n    metadata:\n      bootstrapServers: kafka.kafka.svc:9092\n      consumerGroup: orders-svc\n      topic: orders\n      lagThreshold: \"100\"\n",
+  "findings": [
+    { "code": "KEDA-004", "severity": "info",  "message": "Scale-to-zero enabled — verify activation thresholds..." },
+    { "code": "KEDA-102", "severity": "info",  "message": "Apache Kafka: no 'activationLagThreshold' set..." }
+  ],
+  "hint": null
+}
+```
+
+The browser view at `/ui/workloads/<ns>/<name>` shows the same output with
+copy-to-clipboard and lint pills color-coded by severity.
+
+---
+
+## Apply through GitOps
+
+In production, Kairos doesn't `kubectl apply` — it opens a PR against the
+repo that backs your Argo CD / Flux ApplicationSet:
+
+1. Operator approves the decision at `/ui/pending`.
+2. Kairos opens a PR editing `manifests/orders-consumer/scaledobject.yaml`.
+3. Reviewer merges (or auto-merge if your repo is configured for it).
+4. Argo CD / Flux applies the merged manifest.
+5. The PR-merged GitHub webhook hits `/api/v1/github/webhook`.
+6. The matching `ApprovalRow.status` flips to `merged` in `/ui/history`.
+
+In dry-run mode (default for the demo stack: `KAIROS_FEATURES__DRY_RUN=true`)
+Kairos logs the PR action without actually opening it.
+
+---
+
+## Validate scale-to-zero and back
+
+### Manual verification
+
+```bash
+# 1. With min=0 and no events, replicas should drop to 0 within cooldownPeriod.
+kubectl -n workers get hpa keda-hpa-orders-consumer -w
+
+# 2. Push a message to the queue.
+kubectl -n kafka exec -ti kafka-0 -- \
+    /opt/kafka/bin/kafka-console-producer.sh \
+    --bootstrap-server localhost:9092 --topic orders <<< 'test'
+
+# 3. Within ~pollingInterval seconds, replicas should go 0 → 1.
+kubectl -n workers get pods -l app=orders-consumer -w
+```
+
+### What to look for in Mimir / Grafana
+
+- `keda_scaler_active{scaledObject="orders-consumer-scaler"}` flips 0 → 1
+- `keda:scaler_metric_value:by_metric` (the recording rule from
+  [recording-rules.yaml](../deploy/docker-compose/config/mimir/recording-rules.yaml))
+  reflects the actual lag value.
+- The "KEDA Activity" Grafana dashboard (provisioned by Kairos) shows the
+  cold-start event with a green active marker.
+
+---
+
+## Validate the alert webhook loop
+
+When KEDA scaler errors fire, Grafana sends a webhook to Kairos.
+
+1. **Provoke an error** — break the consumer-group SASL credentials, or
+   point `bootstrapServers` at a host that resolves but won't accept
+   connections.
+2. **Wait 2 minutes** for the `keda-scaler-errors` alert rule to satisfy
+   its `for:` window.
+3. **Check `/ui/alerts`** — the alert appears with the workload uid as
+   subject and an Acknowledge button.
+4. **Reviewer email** — if SMTP is configured, the same alert lands in the
+   reviewer's inbox with Approve / Reject deep-links.
+
+---
+
+## Validate the cost engine
+
+For each workload Kairos targets, the decision payload includes:
+
+```json
+{
+  "cost": {
+    "currency": "USD",
+    "current_monthly": 110.96,
+    "projected_monthly": 166.44,
+    "delta_monthly": 55.48,
+    "delta_percent": 50.0,
+    "direction": "up",
+    "cpu_share_monthly": 131.40,
+    "mem_share_monthly": 35.04,
+    "cpu_per_hour": 0.04,
+    "mem_gib_per_hour": 0.005
+  }
+}
+```
+
+Tune the rates per env from `/ui/admin/envs/<id>`:
+- nonprod ≈ Spot rates (60–90 % cheaper)
+- prod = on-demand list price
+
+The same numbers feed the **cost framing** paragraph in the LLM rationale
+and the bold colored block at the top of every approval email.
+
+---
+
+## Validate Grafana alerts + Mimir recording rules
+
+### Alert rules
+
+```bash
+# Reload provisioning (if Grafana is already up):
+docker compose -p kairos kill -s HUP grafana
+
+# Or restart:
+docker compose -p kairos restart grafana
+
+# Verify the rules registered:
+curl -s -u admin:admin http://localhost:3000/api/ruler/grafana/api/v1/rules | jq .
+```
+
+You should see the three groups Kairos provisions:
+- `kairos-pipeline` (no recent runs, decision error rate)
+- `keda-scaler-health` (scaler errors, fallback active)
+- `alert-pipeline` (webhook failures, firing alert pileup)
+
+### Mimir recording rules
+
+```bash
+# Apply with mimirtool against the Compose Mimir:
+mimirtool rules load deploy/docker-compose/config/mimir/recording-rules.yaml \
+    --address http://localhost:9009 --id anonymous
+
+# Verify:
+mimirtool rules print --address http://localhost:9009 --id anonymous
+```
+
+Five groups, ~25 rules. They pre-aggregate the metrics dashboards + alerts
+hit hardest, so neither the operator nor the alert evaluator pays the rate()
+cost on every render.
+
+---
+
+## Troubleshooting
+
+| Symptom | Likely cause | Fix |
+|---|---|---|
+| Kairos generates ScaledObject but `kubectl apply` rejects it | Two ScaledObjects targeting same Deployment, or invalid scaler config | Use one ScaledObject with multiple triggers (logical OR). Run `kubectl describe scaledobject` for specifics. |
+| HPA stuck at 0 even though queue has messages | `activationLagThreshold` too high | Lower it; verify network policies allow KEDA → broker traffic. |
+| Workload flaps between 0 and N replicas | Cooldown too short, or client prefetch too high | Raise `cooldownPeriod` (60–120s for bursty, 300–600s for long-tail). Reduce client `prefetch` to 1. |
+| `error querying server` from KEDA operator | Another external metrics adapter is installed | KEDA must be the only `external.metrics.k8s.io` provider. `kubectl get apiservice v1beta1.external.metrics.k8s.io`. |
+| Grafana shows alert but Kairos `/ui/alerts` is empty | Webhook contact-point misrouted, or `KAIROS_API__EXTERNAL_URL` wrong | Visit `/ui/admin` → "Inbound webhooks" → copy the alert webhook URL → paste into the Grafana contact point. |
+| `KEDA-104` lint warning on profile activate | Profile uses deprecated `podIdentity.provider: azure` | Switch to `azure-workload`; render the new bundle from `/ui/admin/envs/<id>` with the `kairos.io/keda-trigger-type` override. |
+
+For the canonical KEDA troubleshooting matrix see
+[keda-reference.md §Troubleshooting](keda-reference.md#troubleshooting-checklist).

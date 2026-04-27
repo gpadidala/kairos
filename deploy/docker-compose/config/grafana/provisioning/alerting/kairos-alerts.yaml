@@ -1,0 +1,213 @@
+# Grafana alert rule provisioning — Kairos + KEDA
+#
+# Provisioned automatically on Grafana startup. Rules evaluate every 1m, fire
+# after a 2m for-window, and route through the kairos-webhook contact point
+# (auto-provisioned by Kairos when KAIROS_GRAFANA__API_TOKEN +
+# KAIROS_API__EXTERNAL_URL are set).
+#
+# Reference: https://grafana.com/docs/grafana/latest/alerting/set-up/provision-alerting-resources/
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: kairos-pipeline
+    folder: KAIROS
+    interval: 1m
+    rules:
+
+      - uid: kairos-no-recent-runs
+        title: Kairos pipeline has not run in 30 minutes
+        condition: B
+        data:
+          - refId: A
+            datasourceUid: mimir
+            relativeTimeRange: { from: 600, to: 0 }
+            model:
+              expr: max_over_time(kairos_pipeline_last_run_seconds[10m])
+              instant: true
+              refId: A
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [1800] }
+        for: 5m
+        labels:
+          severity: warning
+          team: platform-sre
+          source: kairos
+        annotations:
+          summary: Kairos has not completed a pipeline run for >30m
+          description: |
+            The Kairos forecasting pipeline has not produced a successful run in
+            the last 30 minutes. Predictions are stale; KEDA will keep working
+            reactively but no proactive scaling will be queued.
+
+      - uid: kairos-decision-error-rate
+        title: Kairos decision-engine errors elevated
+        condition: B
+        data:
+          - refId: A
+            datasourceUid: mimir
+            relativeTimeRange: { from: 300, to: 0 }
+            model:
+              expr: sum(rate(kairos_decisions_total{status="error"}[5m]))
+              instant: true
+              refId: A
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [0.1] }
+        for: 5m
+        labels:
+          severity: critical
+          team: platform-sre
+          source: kairos
+        annotations:
+          summary: Kairos decision engine errors > 0.1/s for 5m
+          description: |
+            The decision engine is failing on individual workloads. Check
+            kairos pod logs and recent ScalingDecision payloads.
+
+  - orgId: 1
+    name: keda-scaler-health
+    folder: KAIROS
+    interval: 1m
+    rules:
+
+      - uid: keda-scaler-errors
+        title: KEDA scaler errors firing
+        condition: B
+        data:
+          - refId: A
+            datasourceUid: mimir
+            relativeTimeRange: { from: 300, to: 0 }
+            model:
+              expr: |
+                sum by (scaledObject, namespace) (
+                  rate(keda_scaler_errors_total[5m])
+                ) > 0.05
+              instant: true
+              refId: A
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [0] }
+        for: 2m
+        labels:
+          severity: warning
+          team: platform-sre
+          source: keda
+        annotations:
+          summary: KEDA scaler errors on {{`{{ $labels.scaledObject }}`}}
+          description: |
+            ScaledObject {{`{{ $labels.namespace }}/{{ $labels.scaledObject }}`}}
+            is reporting scaler errors > 0.05/s for 2 minutes. The HPA may stop
+            receiving fresh metrics. Check `kubectl describe scaledobject` and
+            the operator logs for the failing trigger.
+
+      - uid: keda-fallback-active
+        title: KEDA fallback replicas active
+        condition: B
+        data:
+          - refId: A
+            datasourceUid: mimir
+            relativeTimeRange: { from: 300, to: 0 }
+            model:
+              expr: max(keda_scaled_object_paused) by (scaledObject, namespace) > 0
+              instant: true
+              refId: A
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [0] }
+        for: 1m
+        labels:
+          severity: warning
+          team: platform-sre
+          source: keda
+        annotations:
+          summary: ScaledObject {{`{{ $labels.scaledObject }}`}} is paused
+          description: |
+            KEDA has paused this ScaledObject (likely fell back to the
+            configured fallback.replicas). Investigate the underlying scaler.
+
+  - orgId: 1
+    name: alert-pipeline
+    folder: KAIROS
+    interval: 1m
+    rules:
+
+      - uid: kairos-alert-webhook-failures
+        title: Kairos alert webhook delivery failure rate
+        condition: B
+        data:
+          - refId: A
+            datasourceUid: mimir
+            relativeTimeRange: { from: 600, to: 0 }
+            model:
+              expr: |
+                sum(rate(kairos_alerts_received_total{outcome="error"}[10m]))
+                /
+                clamp_min(sum(rate(kairos_alerts_received_total[10m])), 1)
+              instant: true
+              refId: A
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [0.10] }
+        for: 5m
+        labels:
+          severity: warning
+          team: platform-sre
+          source: kairos
+        annotations:
+          summary: >-
+            Kairos /api/v1/alerts/webhook error rate >10% over 10m
+          description: |
+            Grafana is sending alerts to Kairos but more than 10% are failing
+            normalization or storage. The Approvals UI may be missing alerts.
+
+      - uid: kairos-firing-alert-pileup
+        title: Firing alerts piling up in Kairos
+        condition: B
+        data:
+          - refId: A
+            datasourceUid: mimir
+            relativeTimeRange: { from: 300, to: 0 }
+            model:
+              expr: kairos_alerts_firing
+              instant: true
+              refId: A
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [25] }
+        for: 5m
+        labels:
+          severity: warning
+          team: oncall
+          source: kairos
+        annotations:
+          summary: >-
+            More than 25 alerts firing in Kairos for 5m
+          description: |
+            Either capacity is broadly inadequate or an alert rule is too
+            chatty. Triage at /ui/alerts.

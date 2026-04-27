@@ -1,323 +1,320 @@
-# kairos — Predictive Capacity & Autoscaling Platform
+# Kairos — Predictive Capacity & Autoscaling Platform
 
-Forecast 48 hours of CPU/memory demand for AKS workloads, surface the predicted scaling actions in a human-in-the-loop **approval UI**, and — once approved — open a GitOps PR. Every change flows through a PR that your reviewers see before Argo CD / Flux applies it. KAIROS **augments** KEDA and HPA; it never writes to the cluster.
+Forecast 48 hours of CPU / memory demand for your AKS / GKE / EKS workloads, surface every predicted scaling action in a **human-in-the-loop approval UI**, and — once approved — open a GitOps PR. KEDA continues to handle reactive minute-by-minute scaling. Kairos handles the **planning**.
 
-[![CI](https://img.shields.io/badge/ci-passing-brightgreen)](./.github/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/tests-159%20passing-brightgreen)](./tests)
-[![Coverage](https://img.shields.io/badge/coverage-78%25-brightgreen)](./tests)
+[![Tests](https://img.shields.io/badge/tests-258%20passing-brightgreen)](./tests)
+[![Coverage](https://img.shields.io/badge/coverage-71%25-brightgreen)](./tests)
 [![mypy strict](https://img.shields.io/badge/mypy-strict-success)](./pyproject.toml)
 [![Python 3.12](https://img.shields.io/badge/python-3.12-blue.svg)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 
-Repo split:
+---
 
-| Path | What it's for |
-|---|---|
-| [`deploy/docker-compose/`](deploy/docker-compose/) | **Run the whole stack with Docker Compose** — KAIROS + Redis + Mimir + Grafana. Works behind a corporate proxy / air-gapped. |
-| [`deploy/helm/`](deploy/helm/) · [`deploy/kustomize/`](deploy/kustomize/) | Kubernetes production deploy — Helm chart (RBAC, NetworkPolicy, PDB, HPA, ServiceMonitor) and Kustomize overlays |
-| [`src/kairos/`](src/kairos/) | Python 3.12 application code — FastAPI + HTMX UI + SQLAlchemy + APScheduler |
-| [`examples/demo/`](examples/demo/) | Alternate synthetic-metric demo layout |
-| [`examples/manifests/`](examples/manifests/) · [`examples/keda/`](examples/keda/) | Sample workload manifests KAIROS knows how to scale |
-| [`docs/`](docs/) | Installation guide, full env-var reference, on-call runbooks, ADRs |
-| [`tests/`](tests/) | 159 tests — unit, integration, E2E. `mypy --strict` across 80 source files. |
+## Table of contents
+
+1. [What it does](#what-it-does)
+2. [Architecture at a glance](#architecture-at-a-glance)
+3. [Quickstart — Docker Compose](#quickstart--docker-compose)
+4. [The UI · screenshots](#the-ui--screenshots)
+5. [End-to-end walkthrough](#end-to-end-walkthrough)
+6. [KEDA validation](#keda-validation)
+7. [Grafana alerts + Mimir recording rules](#grafana-alerts--mimir-recording-rules)
+8. [Testing](#testing)
+9. [Configuration reference](#configuration-reference)
+10. [Documentation](#documentation)
 
 ---
 
-## 1. Quick start — run with `docker compose` (no Kubernetes, no AKS)
+## What it does
 
-Prereqs: **Docker Desktop** running. That's it.
+| Capability | Detail |
+|---|---|
+| **48 h forecast** | Prophet (with statistical fallback) on 14 d of Mimir-stored metrics. Weekly + monthly + holiday seasonality. |
+| **Cost engine** | Every decision carries an estimated $/month delta with per-env $/vCPU/h and $/GiB/h rates (Spot in nonprod, on-demand in prod). |
+| **LLM rationale** | Each approval card includes a cost-framing paragraph and an anomaly note when the forecast looks unusual vs recent history. |
+| **GitOps native** | Approvals open a GitHub PR. Argo CD / Flux applies the merged manifest. Kairos never writes to the cluster. |
+| **Multi-tenant** | Portfolio › Program › Team › App-Code annotations (`kairos.io/*`) bubble up to every UI surface. |
+| **KEDA toolkit** | `/ui/keda/catalog` browser of 15 scalers; per-workload ScaledObject preview generator; production-best-practices linter (KEDA-001…204). |
+| **Multi-environment** | Activate dev / staging / prod / DR profiles from `/ui/admin` to hot-reload Grafana + GitHub clients without a restart. |
+| **CloudEvents 1.0** | Outbound webhooks emit CE-wrapped envelopes for Knative EventSources, Azure Event Grid, AWS EventBridge. |
+| **Approval emails** | Reviewers get a polished HTML email with cost block, anomaly callout, forecast snapshot, and Approve / Reject deep-link buttons. |
 
-### Three rules that make it work every time
+---
 
-1. **`cd` into `deploy/docker-compose/`** — NOT `deploy/docker-compose/compose/`. The `.env` file lives in `deploy/docker-compose/` and compose looks there.
-2. **Create `.env` before the first run** — it's gitignored; only `.env.example` ships with the repo. The `setup.sh` / `setup.ps1` scripts create it for you.
-3. **Pass `--env-file .env -f compose/docker-compose.yml`** explicitly so path resolution isn't ambiguous.
+## Architecture at a glance
 
-### Exact commands
+```
+                 ┌──────────────┐
+                 │   AKS / GKE  │
+                 │   workloads  │──┐
+                 └──────────────┘  │  scrape
+                                   ▼
+                         ┌──────────────┐
+                         │  Alloy / OTel│
+                         └──────┬───────┘
+                                │ remote-write
+                                ▼
+                          ┌──────────┐    ┌──────────────┐
+                          │  Mimir   │───►│   Grafana    │
+                          │ (14 d)   │    │ dashboards + │
+                          └────┬─────┘    │   alerts     │
+                               │ PromQL   └──────┬───────┘
+                               ▼                 │ webhook
+                       ┌─────────────────────────┴──────────┐
+                       │              KAIROS                 │
+                       │  Prophet · rules R-001..R-008      │
+                       │  cost engine · LLM rationale       │
+                       │  approval queue · /ui/admin envs   │
+                       └────────────────┬───────────────────┘
+                                        │ approved
+                                        ▼
+                                ┌───────────────┐
+                                │  GitHub PR    │
+                                └───────┬───────┘
+                                        │ merge
+                                        ▼
+                                ┌───────────────┐
+                                │  Argo CD /    │
+                                │  Flux applies │
+                                └───────┬───────┘
+                                        │
+                                        ▼
+                                ┌───────────────┐
+                                │  KEDA + HPA   │
+                                │  reactive (now)│
+                                └───────────────┘
+```
 
-#### macOS / Linux
+Solid lines = primary forecasting flow. KEDA continues to run reactive scaling on the right edge; Kairos plans on the left.
+
+---
+
+## Quickstart — Docker Compose
+
+The bundled stack ships Kairos + Grafana + Mimir + Redis + a seed loader. No cluster needed for the demo.
 
 ```bash
-cd deploy/docker-compose
-./scripts/setup.sh              # bootstraps .env, brings stack up
-# OR, explicit:
-cp .env.example .env
-docker compose --env-file .env -f compose/docker-compose.yml -p kairos up -d --build
+git clone https://github.com/gpadidala/kairos.git
+cd kairos/deploy/docker-compose
+cp .env.example .env                # add your GitHub + Grafana tokens
+make up                             # docker compose up -d --build
+open http://localhost:8090/ui/home
 ```
 
-#### Windows (PowerShell)
+**Bundled services:**
 
-```powershell
-cd deploy\docker-compose
-.\scripts\setup.ps1
-# OR, explicit:
-Copy-Item .env.example .env
-docker compose --env-file .env -f compose/docker-compose.yml -p kairos up -d --build
-```
-
-#### Legacy `docker-compose` v1 (hyphenated, still works)
-
-```bash
-cd deploy/docker-compose
-cp .env.example .env
-docker-compose --env-file .env -f compose/docker-compose.yml -p kairos up -d --build
-```
-
-### Verify
-
-```bash
-cd deploy/docker-compose
-make verify
-```
-
-```
-KAIROS:    {"status":"ok","version":"0.1.0"}
-Grafana: {"database":"ok","version":"11.4.0"}
-Mimir:   ready
-```
-
-Open **http://localhost:8090/ui** — lands on the KAIROS overview dashboard.
-
-| URL | What you see |
-|---|---|
-| http://localhost:8090/ui | KAIROS UI — pending approvals, history, KEDA activity, alerts |
-| http://localhost:8090/docs | Swagger UI for the JSON API |
-| http://localhost:3000 | Grafana (admin/admin) — KAIROS folder with two dashboards pre-provisioned |
-| http://localhost:9009 | Mimir admin |
-
-### Common commands (run from `deploy/docker-compose/`)
-
-| Action | Command |
-|---|---|
-| Stop, keep volumes | `make down` |
-| Nuke + reset volumes | `make nuke` |
-| Tail KAIROS logs | `docker compose -f compose/docker-compose.yml -p kairos logs -f kairos` |
-| Rebuild after code change | `docker compose --env-file .env -f compose/docker-compose.yml -p kairos up -d --force-recreate --build kairos` |
-| Trigger a prediction cycle | `curl -X POST http://localhost:8090/api/v1/runs -d '{"dry_run": true}'` |
-| Enable synthetic metrics demo | `make demo-up` |
-| Pre-pull all images (air-gapped) | `make pull` |
-| Back up audit DB + Redis | `make backup` |
-
-The compose file has sensible defaults for every image tag — `${GRAFANA_TAG:-11.4.0}`, `${MIMIR_TAG:-2.13.0}` etc. — so the build won't fail even if `.env` is missing. Only the Grafana admin password + secrets need to come from `.env` or `.secrets/`.
-
-Full corporate-env notes (proxy, image mirror, air-gapped install, secrets handling): [`deploy/docker-compose/README.md`](./deploy/docker-compose/README.md).
-
----
-
-## 2. What KAIROS does
-
-```
-┌────────────────────────────────────────────────────────────────────────┐
-│                         AKS workloads                                  │
-│        Deployments · StatefulSets · DaemonSets                         │
-│    (JVM · Python · Go · .NET) — each exposes /metrics                  │
-└────────────────────────────────────┬───────────────────────────────────┘
-                                     │ scrape
-                           ┌─────────▼────────┐
-                           │  Grafana Alloy   │
-                           └─────────┬────────┘
-                                     │ remote_write
-                           ┌─────────▼────────┐
-                           │  Grafana Mimir   │  long-term TSDB
-                           └─────────┬────────┘
-                                     │ PromQL
-                           ┌─────────▼────────┐
-                           │       KAIROS       │
-                           │                  │
-                           │  discover  →     │
-                           │  collect   →     │
-                           │  forecast  →     │ 48h horizon, Prophet+fallback
-                           │  decide    →     │ deterministic rules R-001..R-008
-                           │  enqueue   →     │ ◀─ APPROVE in UI ──┐
-                           │  advise    →     │ LLM (optional)     │
-                           │  PR        →     │ ──────────────────►│ GitOps repo
-                           │  notify    →     │ Teams / Slack / Email
-                           │  audit     →     │ SQLite (or Postgres)
-                           └──────────────────┘                    │
-                                                                   ▼
-                                                     Argo CD / Flux → AKS
-```
-
-Full architecture: [`ARCHITECTURE.md`](./ARCHITECTURE.md). ADRs under [`docs/adr/`](./docs/adr/) cover the load-bearing decisions (Prophet + fallback, multi-LLM failover, no-direct-cluster-writes, Redis dedup).
-
----
-
-## 3. The approval UI (what you actually interact with)
-
-At `/ui`:
-
-| Screen | What you see |
-|---|---|
-| **Overview** | counters (pending, decisions today, PRs today), recent runs, approvals-by-status |
-| **Pending** | one card per predicted scaling action awaiting approval — with Approve + Reject buttons. Approving fires the GitOps PR and moves the row to *Applied*. |
-| **History** | 50 most recent approvals, PRs, decisions — all queryable |
-| **KEDA Activity** | 24-hour replica deltas per Deployment, KEDA scaler events, node-pool size + 24h delta per pool — pulled live from Grafana → Mimir |
-| **Alerts** | Active alerts from Grafana unified alerting, read-only |
-
-```
- Pending ──[Approve via UI]──► Approved ──► Applied (PR #42)
-                           └──[Reject]───► Rejected (with reason)
- Pending ──(24h elapsed)──► Expired (auto)
-```
-
-Per-decision approval ID is content-addressed by decision hash, so duplicate detections collapse to a single row until approved/rejected/expired.
-
----
-
-## 4. Production deploy on AKS (Helm)
-
-When you're ready to run inside the cluster rather than as a standalone Compose stack:
-
-```bash
-kubectl create namespace kairos
-helm install kairos deploy/helm/kairos \
-  --namespace kairos \
-  --values deploy/helm/kairos/values-prod.yaml \
-  --set config.github.repo=your-org/your-gitops-repo
-```
-
-Full installation guide: [`docs/installation.md`](./docs/installation.md). The Helm chart ships:
-
-- `Deployment` (2 replicas, anti-affinity, read-only rootfs, dropped capabilities, non-root UID 10001)
-- `ServiceAccount` + `ClusterRole` — **read-only** verbs on workloads + ScaledObjects + ConfigMaps. No write verbs anywhere.
-- `NetworkPolicy` with egress allow-list (Mimir, Grafana, GitHub, LLM, Redis, OTel)
-- `PodDisruptionBudget` minAvailable=1, `HorizontalPodAutoscaler` on CPU
-- `ServiceMonitor` for Prometheus-Operator scraping
-- External-secret references (CSI / ExternalSecret); no inline secrets
-
----
-
-## 5. Configuration reference
-
-Every setting is env-driven, prefix `KAIROS_`, nested via `__` (double underscore).
-
-Common knobs (full reference in [`docs/configuration.md`](./docs/configuration.md)):
-
-| Env | Default | What it does |
+| Service | URL | Purpose |
 |---|---|---|
-| `KAIROS_FEATURES__DRY_RUN` | `true` | Logs decisions, skips side effects |
-| `KAIROS_FEATURES__REQUIRE_UI_APPROVAL` | `true` | Queue for UI approval instead of immediate PR |
-| `KAIROS_FEATURES__ENABLE_PR_CREATION` | `false` | Real GitHub PRs (needs `KAIROS_GITHUB__TOKEN`) |
-| `KAIROS_FEATURES__ENABLE_LLM` | `true` | LLM-generated rationales in PR body |
-| `KAIROS_FEATURES__ENABLE_NOTIFICATIONS` | `true` | Teams + Slack + Email dispatch |
-| `KAIROS_SCHEDULER__INTERVAL_MINUTES` | `30` | How often Pipeline.run_once fires |
-| `KAIROS_FORECASTING__HORIZON_HOURS` | `48` | How far ahead to predict |
-| `KAIROS_DECISION__CPU_HEADROOM_THRESHOLD` | `0.80` | R-001 CPU breach gate |
-| `KAIROS_DECISION__MEM_HEADROOM_THRESHOLD` | `0.80` | R-002 memory breach gate |
-| `KAIROS_DECISION__LOW_UTILIZATION_THRESHOLD` | `0.30` | R-008 scale-down gate |
-| `KAIROS_LLM__PRIMARY` | `anthropic` | LLM router primary (`openai`, `azure_openai`, `ollama` supported) |
+| Kairos UI + API | http://localhost:8090 | This app |
+| Grafana | http://localhost:3000 | Dashboards + alert routing |
+| Mimir | http://localhost:9009 | Long-term TSDB |
+| Redis | localhost:6379 | Dedup + idempotency cache |
 
-The Docker Compose stack maps a friendlier `KAIROS_FEATURES_*` form (single underscore) onto these via `.env`; see `deploy/docker-compose/.env.example`.
-
----
-
-## 6. Decision rules (R-001 through R-008)
-
-Evaluated in priority order. First match wins (with R-007 acting as a gate).
-
-| Rule | Condition | Action |
-|---|---|---|
-| R-007 | Forecast confidence < 0.4 | `NOOP` (with warning) — always checked first |
-| R-005 | KEDA scaler lag trending up > 2σ over 1h | `KEDA_PRESCALE` |
-| R-004 | DaemonSet AND any breach | `NODE_POOL_ADVISORY` (no PR; alert only) |
-| R-001 | `forecast.cpu.p95 / cpu_limit > 0.80` | `HORIZONTAL_UP` (Deployment) / `HUMAN_APPROVAL_REQUIRED` (StatefulSet) |
-| R-002 | `forecast.mem.peak / mem_limit > 0.80` | `VERTICAL_UP` (Deployment) / `HUMAN_APPROVAL_REQUIRED` (StatefulSet) |
-| R-008 | Sustained < 30% utilization over 7d, current_replicas > min_replicas | `HORIZONTAL_DOWN` |
-| R-006 | All forecasts within ±15% of current | `NOOP` |
-| — | Otherwise | `NOOP` |
-
-Thresholds are env-configurable. Rules are pure functions in [`src/kairos/decision/rules.py`](./src/kairos/decision/rules.py) — every rule has unit + property-based tests in [`tests/unit/test_decision_engine.py`](./tests/unit/test_decision_engine.py).
-
----
-
-## 7. Development
+Trigger a pipeline run:
 
 ```bash
-uv --version                    # uv is the package manager
-make install                    # uv sync + dev deps
-make verify                     # ruff + mypy --strict + pytest + coverage gate
-make test-unit                  # fast unit tests only
-make test-integration           # integration tests with respx mocks
-make test-e2e                   # full pipeline E2E with stubbed Mimir/GitHub/LLM/notify
-make api                        # run the FastAPI app locally on :8080
+curl -X POST http://localhost:8090/api/v1/runs \
+  -H 'Content-Type: application/json' \
+  -d '{"dry_run": true}'
 ```
-
-### What's under the hood
-
-| Area | Choice | Rationale |
-|---|---|---|
-| Language | Python 3.12 + mypy --strict | production-grade correctness |
-| Package manager | `uv` | fast, reproducible |
-| API | FastAPI + Uvicorn | async-native |
-| UI | HTMX + Jinja2 + Tailwind CDN | no Node toolchain; server-rendered |
-| Validation | Pydantic v2 | every module boundary |
-| Storage | SQLite default, Postgres optional | single-binary demo-friendly; swap URL for prod |
-| Cache + dedup | Redis 7 | `SET NX EX` for content-addressed dedup |
-| HTTP | httpx[http2] async | with tenacity retries + custom async circuit breaker |
-| Forecasting | Prophet + statistical fallback | ADR-0002 |
-| LLM | httpx direct, 4 providers | ADR-0003: Anthropic (default), OpenAI, Azure OpenAI, Ollama |
-| GitOps edits | `ruamel.yaml` round-trip | preserves comments + ordering in PR diffs |
-| Tracing | OpenTelemetry + OTLP | self-observability |
-| Metrics | prometheus-client | `/metrics` endpoint, 11 counters/gauges/histograms |
 
 ---
 
-## 8. Security posture
+## The UI · screenshots
 
-- **No cluster writes.** KAIROS's ServiceAccount has `get/list/watch` only on Deployments, StatefulSets, DaemonSets, ConfigMaps, and KEDA ScaledObjects. **No write verbs on anything.** (ADR-0004)
-- **No direct edits to `main`.** Every change is a pull request against a configured branch.
-- **No duplicate PRs.** Redis `SET NX EX` on a content-addressed `decision_hash` guarantees one open PR per logical decision within the TTL window. (ADR-0005)
-- **Read-only rootfs** in the container. Non-root UID 10001. All Linux capabilities dropped.
-- **PII redaction** on every LLM prompt: IPv4 addresses, bearer tokens, `PASSWORD=`/`API_KEY=`-style patterns, Azure storage keys. Unit-tested in `tests/unit/test_llm_redaction.py`.
-- **Secret logging guard:** the structlog config redacts any event key containing `token`, `password`, `secret`, `webhook_url`, `bearer`, `dsn`, `authorization` before emission.
-- **Bearer-token API auth** via SHA-256 digest list (never raw tokens in config).
-- **Images signed with cosign + SBOM** (syft) in the release workflow.
+> Screenshots are auto-captured by the Playwright E2E suite — re-run `pytest tests/e2e/` after a UI change and they regenerate.
+
+### Home — landing & demo
+The intro page surfaces the architecture diagram, the 5-step demo walkthrough, and one-click links to Open Overview / Admin.
+
+![Home](docs/screenshots/01-home.png)
+
+### Overview / dashboard — 7-day activity
+Decisions per day · decisions by action · approvals + alerts state breakdown · counter tiles · recent pipeline runs.
+
+![Dashboard](docs/screenshots/02-dashboard.png)
+
+### Pending approvals
+Each card shows severity → workload → rationale → **cost impact ($/month delta, color-coded)** → anomaly callout (if any) → proposed-shape diff → cost framing → forecasts → full LLM advice → Approve / Reject buttons.
+
+![Pending](docs/screenshots/03-pending.png)
+
+### Admin — environments + connections
+Top: env profile cards with active-state ring, edit / activate / deactivate buttons.
+Middle: connection table for Grafana / Mimir / GitHub / Redis / Audit DB with **live Test buttons** (HTMX-driven).
+Bottom: webhook URLs + feature flags + workload discovery + forecasting / decision thresholds.
+
+![Admin](docs/screenshots/04-admin.png)
+
+### Admin — env profile form
+Per-env override form: Identity · Grafana · Mimir · GitHub · Cost rates · Webhooks. Empty fields fall through to env-var defaults. Activating hot-reloads the Grafana + GitHub clients without a restart.
+
+![Admin · Env profile form](docs/screenshots/05-admin-env-form.png)
+
+### KEDA · scaler catalog
+15 priority scalers grouped by category. Each card: name, type, summary, metric meaning, top-5 fields with required badges, auth modes, wake-from-zero field, operator notes.
+
+![KEDA · Scaler catalog](docs/screenshots/06-keda-catalog.png)
+
+### Workloads
+Multi-tenant pills (portfolio · program · team) on every row. Latest decision column on the right.
+
+![Workloads](docs/screenshots/07-workloads.png)
+
+### Alerts
+Webhook URL up top with copy button. Firing alerts as cards with Acknowledge action. Recent (resolved + acknowledged) below as a dense table.
+
+![Alerts](docs/screenshots/08-alerts.png)
+
+### History
+Recent pipeline runs · approvals · PRs.
+
+![History](docs/screenshots/09-history.png)
 
 ---
 
-## 9. Observability
+## End-to-end walkthrough
 
-KAIROS exposes Prometheus metrics at `/metrics`. Key series:
+Step 1 — **bring the stack up** (see Quickstart). Confirm the header pill on `/ui/home` reads `All systems`.
 
-```
-kairos_pipeline_runs_total{status}                — counter
-kairos_pipeline_duration_seconds{phase}           — histogram
-kairos_forecasts_generated_total{model,kind}      — counter
-kairos_decisions_total{action,severity}           — counter
-kairos_prs_created_total{result}                  — counter
-kairos_notifications_sent_total{channel,result}   — counter
-kairos_llm_calls_total{provider,result}           — counter
-kairos_llm_tokens_total{provider,kind}            — counter
-kairos_external_call_duration_seconds{service}    — histogram
-kairos_circuit_breaker_state{service}             — gauge (0=closed, 1=half, 2=open)
-kairos_dedup_hits_total{kind}                     — counter
-```
+Step 2 — **trigger a pipeline run** from `/ui/dashboard` (Trigger run button) or via `POST /api/v1/runs`.
 
-A platform dashboard ships at [`deploy/grafana/dashboards/kairos-platform.json`](./deploy/grafana/dashboards/kairos-platform.json) and is auto-provisioned by the Compose stack.
+Step 3 — **review pending approvals** at `/ui/pending`. Each card shows the cost delta, anomaly note, and forecast snapshot. Click Approve.
 
-OpenTelemetry spans wrap every pipeline phase + every external call. Enable with `KAIROS_TRACING__ENABLED=true` and an OTLP endpoint.
+Step 4 — **watch the approval flow**:
+- A GitOps PR is opened (or logged in dry-run mode) against the configured GitHub repo.
+- The audit row in `/ui/history` flips to `applied`.
+- Approval status pill on `/ui/admin` increments.
+
+Step 5 — **observe alerts**:
+- Grafana alert rules (provisioned automatically — see [Grafana alerts](#grafana-alerts--mimir-recording-rules)) fire on the `kairos-webhook` contact point.
+- Alerts appear at `/ui/alerts` with Acknowledge buttons.
+- Reviewer also gets a **rich approval email** with Approve / Reject deep-link buttons (`/ui/approvals/<id>/approve`).
+
+Step 6 — **close the loop**: when the PR merges, Argo CD / Flux applies the manifest, KEDA picks up the new shape, the load drops, Grafana auto-resolves the alert, the GitHub `pull_request.closed + merged=true` webhook hits `/api/v1/github/webhook`, and the matching `ApprovalRow.status` becomes `merged`.
 
 ---
 
-## 10. Runbooks
+## KEDA validation
 
-Under [`docs/runbooks/`](./docs/runbooks/):
+Kairos generates valid `ScaledObject` / `ScaledJob` / `TriggerAuthentication` / `HTTPScaledObject` YAML for any of the 15 priority scalers — and a production-best-practices linter flags the gotchas.
 
-| Runbook | When to read |
+```bash
+# Browse the catalog (UI)
+open http://localhost:8090/ui/keda/catalog
+
+# Generate a ScaledObject preview for a workload (API)
+curl 'http://localhost:8090/api/v1/keda/scaledobject/preview?workload_uid=Deployment/prod/billing-svc'
+```
+
+Add one of these annotations to a workload to auto-detect the right trigger:
+
+| Annotation | Maps to |
 |---|---|
-| [`on-call.md`](./docs/runbooks/on-call.md) | First 5 minutes — first thing oncall looks at |
-| [`kairos-down.md`](./docs/runbooks/kairos-down.md) | KAIROS itself failing or readiness-failing |
-| [`llm-degraded.md`](./docs/runbooks/llm-degraded.md) | LLM providers erroring / rate-limited |
-| [`github-rate-limit.md`](./docs/runbooks/github-rate-limit.md) | GitHub API breaker open / 429s |
+| `kairos.io/kafka-topic` (+ `kafka-consumer-group`, `kafka-bootstrap`, `kafka-lag-threshold`) | `type: kafka` |
+| `kairos.io/rabbitmq-queue` (+ `rabbitmq-target`) | `type: rabbitmq` |
+| `kairos.io/sqs-queue-url` (+ `sqs-target`, `aws-region`) | `type: aws-sqs-queue` |
+| `kairos.io/prometheus-query` (+ `prometheus-server`, `prometheus-threshold`) | `type: prometheus` |
+| `kairos.io/keda-trigger-type` | explicit override |
+
+The generator also emits **Azure Workload Identity bundles** (ServiceAccount + TriggerAuthentication + the matching `az identity federated-credential create` command as an inline comment) to satisfy the KEDA 2.15+ deprecation of `aad-pod-identity`.
+
+See [docs/keda-reference.md](docs/keda-reference.md) for the full catalog and [docs/keda-integration.md](docs/keda-integration.md) for production wiring.
 
 ---
 
-## 11. Roadmap
+## Grafana alerts + Mimir recording rules
 
-See [`ROADMAP.md`](./ROADMAP.md). Post-MVP: interactive Slack/Teams approvals, ServiceNow/Jira ticketing for `HUMAN_APPROVAL_REQUIRED`, VPA cross-check, multi-cluster federation, cost-aware decisions (Azure pricing API).
+Both ship as provisioning files mounted into the bundled containers.
+
+### Grafana alert rules — `deploy/docker-compose/config/grafana/provisioning/alerting/kairos-alerts.yaml`
+
+| UID | Severity | Fires when |
+|---|---|---|
+| `kairos-no-recent-runs` | warning | No successful pipeline run in 30 min |
+| `kairos-decision-error-rate` | critical | Decision-engine errors > 0.1/s for 5m |
+| `keda-scaler-errors` | warning | Per-ScaledObject scaler errors > 0.05/s for 2m |
+| `keda-fallback-active` | warning | Any ScaledObject paused / on fallback for 1m |
+| `kairos-alert-webhook-failures` | warning | `/api/v1/alerts/webhook` error ratio > 10% over 10m |
+| `kairos-firing-alert-pileup` | warning | `kairos_alerts_firing > 25` for 5m |
+
+All route to the auto-provisioned `kairos-webhook` contact point.
+
+### Mimir recording rules — `deploy/docker-compose/config/mimir/recording-rules.yaml`
+
+Pre-aggregated for the dashboards + alerts above:
+
+| Group | Notable rules |
+|---|---|
+| `kairos.pipeline` | `kairos:pipeline_runs:rate5m`, `kairos:decisions:rate5m`, `kairos:decisions:per_action_24h` |
+| `kairos.approvals` | `kairos:approvals:pending`, `kairos:approvals:wait_seconds:p95`, `kairos:prs:opened:rate1h` |
+| `kairos.alerts` | `kairos:alerts:received:rate5m`, `kairos:alerts:webhook_error_ratio:5m` |
+| `keda.scalers` | `keda:scaler_errors:rate5m`, `keda:scaler_active:by_object`, `keda:hpa_replicas:current/desired` |
+| `workload.utilization` | `workload:cpu_cores:p95_5m / peak_24h`, `workload:memory_bytes:p95_5m / peak_24h` (drives forecasts) |
+
+Apply outside Docker Compose with `mimirtool rules load`.
+
+---
+
+## Testing
+
+The repo ships three layers:
+
+```bash
+# Unit tests — pure-Python, no external services. ~250 tests, mypy --strict.
+uv run python -m pytest -q
+
+# API smoke tests — hit the running compose stack at :8090. ~28 tests.
+KAIROS_SMOKE_URL=http://localhost:8090 \
+  uv run python -m pytest tests/integration/test_api_smoke.py -v
+
+# Playwright E2E tests + auto-generates docs/screenshots/. ~15 tests.
+uv run playwright install chromium      # one-time
+KAIROS_E2E_URL=http://localhost:8090 \
+  uv run python -m pytest tests/e2e/test_ui_smoke.py -v
+```
+
+CI runs unit-only by default; the smoke + E2E suites run on demand against a real compose stack.
+
+---
+
+## Configuration reference
+
+Everything is env-driven via Pydantic Settings (prefix `KAIROS_`, nested with `__`). The most-used:
+
+| Env var | Default | What it controls |
+|---|---|---|
+| `KAIROS_GRAFANA__URL` | `http://grafana:3000` | Server-side Grafana URL |
+| `KAIROS_GRAFANA__EXTERNAL_URL` | — | Browser-facing URL (links) |
+| `KAIROS_GRAFANA__API_TOKEN` | — | Provisioning + contact-point auth |
+| `KAIROS_MIMIR__URL` | `http://mimir:8080` | Long-term TSDB |
+| `KAIROS_GITHUB__REPO` | — | Owner/repo for GitOps PRs |
+| `KAIROS_GITHUB__TOKEN` | — | Fine-grained PAT |
+| `KAIROS_API__EXTERNAL_URL` | — | Public Kairos URL (used for inbound webhook URLs) |
+| `KAIROS_FEATURES__DRY_RUN` | `true` | Skip real PR creation |
+| `KAIROS_FEATURES__REQUIRE_UI_APPROVAL` | `true` | Queue every non-NOOP decision |
+| `KAIROS_FEATURES__EMIT_CLOUDEVENTS` | `false` | Wrap outbound webhooks as CloudEvents 1.0 |
+| `KAIROS_COST__CPU_PER_HOUR` | `0.0400` | Default $/vCPU/hour |
+| `KAIROS_COST__MEM_GIB_PER_HOUR` | `0.0050` | Default $/GiB/hour |
+| `KAIROS_FORECASTING__HOLIDAY_CALENDARS` | `["us"]` | Prophet holidays (us / in / eu / intl) |
+
+Everything is also overridable per environment from `/ui/admin/envs` — see the screenshots above.
+
+---
+
+## Documentation
+
+| Doc | What's in it |
+|---|---|
+| [docs/keda-reference.md](docs/keda-reference.md) | Full KEDA reference: 70+ scalers, HTTP add-on, TriggerAuthentication, language consumer impls (Python / Node / Java / .NET / Go / Ruby / PHP) |
+| [docs/keda-integration.md](docs/keda-integration.md) | How Kairos integrates with a real KEDA deployment |
+| [docs/configuration.md](docs/configuration.md) | Every Pydantic setting, defaults, env vars |
+| [docs/installation.md](docs/installation.md) | Detailed install paths (compose / k8s / managed) |
+| [docs/runbooks/](docs/runbooks/) | On-call runbooks |
+| [docs/adr/](docs/adr/) | Architecture decision records |
 
 ---
 
 ## License
 
-MIT — see [`LICENSE`](./LICENSE).
+MIT — see [LICENSE](LICENSE).

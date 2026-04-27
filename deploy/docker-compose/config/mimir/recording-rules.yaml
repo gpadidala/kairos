@@ -1,0 +1,128 @@
+# Mimir recording rules — Kairos + KEDA
+#
+# Recording rules pre-aggregate the queries dashboards + alerts hit hardest,
+# so neither the operator nor the alert evaluator pays the rate() cost on
+# every render.
+#
+# Loaded by Mimir's ruler. Apply with:
+#   mimirtool rules load deploy/docker-compose/config/mimir/recording-rules.yaml \
+#     --address http://mimir:9009 --id anonymous
+#
+# Or mount alongside your tenant rules in production.
+#
+# Naming convention follows Prometheus best practices:
+#   level:metric:operations
+# e.g. workload:cpu_cores:p95_5m
+
+groups:
+  # ── Forecasting / decision throughput ─────────────────────────────
+  - name: kairos.pipeline
+    interval: 30s
+    rules:
+      - record: kairos:pipeline_runs:rate5m
+        expr: sum(rate(kairos_pipeline_runs_total[5m]))
+
+      - record: kairos:pipeline_runs:success_ratio_5m
+        expr: |
+          sum(rate(kairos_pipeline_runs_total{status="succeeded"}[5m]))
+          /
+          clamp_min(sum(rate(kairos_pipeline_runs_total[5m])), 1)
+
+      - record: kairos:decisions:rate5m
+        expr: sum(rate(kairos_decisions_total[5m])) by (action, severity)
+
+      - record: kairos:decisions:per_action_24h
+        expr: sum(increase(kairos_decisions_total[24h])) by (action)
+
+  # ── Approvals + PRs ───────────────────────────────────────────────
+  - name: kairos.approvals
+    interval: 30s
+    rules:
+      - record: kairos:approvals:pending
+        expr: kairos_pending_approvals
+
+      - record: kairos:approvals:wait_seconds:p95
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(kairos_approval_wait_seconds_bucket[1h])) by (le)
+          )
+
+      - record: kairos:prs:opened:rate1h
+        expr: sum(rate(kairos_prs_opened_total[1h]))
+
+      - record: kairos:prs:merged:rate1h
+        expr: sum(rate(kairos_prs_merged_total[1h]))
+
+  # ── Alert pipeline ─────────────────────────────────────────────────
+  - name: kairos.alerts
+    interval: 30s
+    rules:
+      - record: kairos:alerts:received:rate5m
+        expr: sum(rate(kairos_alerts_received_total[5m])) by (outcome)
+
+      - record: kairos:alerts:webhook_error_ratio:5m
+        expr: |
+          sum(rate(kairos_alerts_received_total{outcome="error"}[5m]))
+          /
+          clamp_min(sum(rate(kairos_alerts_received_total[5m])), 1)
+
+  # ── KEDA scaler health (per ScaledObject) ─────────────────────────
+  - name: keda.scalers
+    interval: 30s
+    rules:
+      - record: keda:scaler_errors:rate5m
+        expr: sum(rate(keda_scaler_errors_total[5m])) by (scaledObject, namespace, scaler)
+
+      - record: keda:scaler_active:by_object
+        expr: max(keda_scaler_active) by (scaledObject, namespace)
+
+      - record: keda:scaler_metric_value:by_metric
+        expr: max(keda_scaler_metrics_value) by (scaledObject, namespace, metric)
+
+      - record: keda:hpa_replicas:current
+        expr: |
+          max(kube_horizontalpodautoscaler_status_current_replicas{
+            horizontalpodautoscaler=~"keda-hpa-.*"
+          }) by (namespace, horizontalpodautoscaler)
+
+      - record: keda:hpa_replicas:desired
+        expr: |
+          max(kube_horizontalpodautoscaler_status_desired_replicas{
+            horizontalpodautoscaler=~"keda-hpa-.*"
+          }) by (namespace, horizontalpodautoscaler)
+
+  # ── Per-workload CPU + memory shape (drives forecasts) ────────────
+  - name: workload.utilization
+    interval: 30s
+    rules:
+      - record: workload:cpu_cores:p95_5m
+        expr: |
+          quantile_over_time(0.95,
+            sum by (namespace, pod) (
+              rate(container_cpu_usage_seconds_total{container!="",pod!=""}[5m])
+            )[5m:30s]
+          )
+
+      - record: workload:cpu_cores:peak_24h
+        expr: |
+          max_over_time(
+            sum by (namespace, pod) (
+              rate(container_cpu_usage_seconds_total{container!="",pod!=""}[5m])
+            )[24h:5m]
+          )
+
+      - record: workload:memory_bytes:p95_5m
+        expr: |
+          quantile_over_time(0.95,
+            sum by (namespace, pod) (
+              container_memory_working_set_bytes{container!="",pod!=""}
+            )[5m:30s]
+          )
+
+      - record: workload:memory_bytes:peak_24h
+        expr: |
+          max_over_time(
+            sum by (namespace, pod) (
+              container_memory_working_set_bytes{container!="",pod!=""}
+            )[24h:5m]
+          )
